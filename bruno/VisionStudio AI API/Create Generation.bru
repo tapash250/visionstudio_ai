@@ -1,0 +1,29 @@
+meta {
+  name: Create Generation
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/generate/
+  body: json
+  auth: bearer
+}
+
+body:json {
+  {
+    "prompt": "a beautiful sunset over mountains",
+    "negativePrompt": "blurry, low quality",
+    "model": "flux-dev",
+    "style": "cinematic",
+    "aspectRatio": "16:9",
+    "seed": 12345,
+    "steps": 30,
+    "cfgScale": 7.5,
+    "batchSize": 1
+  }
+}
+
+vars:post-response {
+  jobId: res.body.jobId
+}

@@ -1,0 +1,11 @@
+meta {
+  name: Get Generation Status
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/generate/{{jobId}}
+  body: none
+  auth: bearer
+}

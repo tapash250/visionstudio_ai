@@ -1,0 +1,25 @@
+# Global owners
+* @visionstudio/core-team
+
+# Frontend
+/frontend/ @visionstudio/frontend-team
+/frontend/src/app/ @visionstudio/frontend-team
+/frontend/src/components/ @visionstudio/frontend-team
+
+# Backend
+/backend/ @visionstudio/backend-team
+/backend/app/routers/ @visionstudio/backend-team
+/backend/app/services/ @visionstudio/backend-team
+
+# AI/ML
+/gpu-worker/ @visionstudio/ml-team
+/backend/app/workers/ @visionstudio/ml-team
+
+# DevOps
+/docker/ @visionstudio/devops-team
+/k8s/ @visionstudio/devops-team
+/.github/ @visionstudio/devops-team
+
+# Documentation
+/*.md @visionstudio/docs-team
+/docs/ @visionstudio/docs-team

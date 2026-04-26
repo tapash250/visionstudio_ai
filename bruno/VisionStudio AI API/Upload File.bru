@@ -1,0 +1,15 @@
+meta {
+  name: Upload File
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/upload/
+  body: multipartForm
+  auth: bearer
+}
+
+body:multipart-form {
+  file: @file(image.png)
+}

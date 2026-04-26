@@ -1,0 +1,27 @@
+meta {
+  name: VisionStudio AI API
+  type: collection
+  version: 1.0.0
+}
+
+auth {
+  mode: bearer
+  bearer {
+    token: {{accessToken}}
+  }
+}
+
+vars:pre-request {
+  baseUrl: http://localhost:8000
+}
+
+docs {
+  # VisionStudio AI API Collection
+
+  This collection contains all API endpoints for VisionStudio AI.
+
+  ## Authentication
+
+  Most endpoints require a Bearer token. First call `/api/auth/token` to get a token,
+  then use it in the `accessToken` collection variable.
+}

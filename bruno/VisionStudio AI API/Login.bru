@@ -1,0 +1,20 @@
+meta {
+  name: Login
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/auth/token
+  body: formUrlEncoded
+  auth: none
+}
+
+body:form-urlencoded {
+  username: user@example.com
+  password: securepassword123
+}
+
+vars:post-response {
+  accessToken: res.body.access_token
+}
