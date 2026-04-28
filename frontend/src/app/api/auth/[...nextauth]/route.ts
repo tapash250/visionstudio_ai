@@ -14,7 +14,7 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
-export const authOptions = {
+const authOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
     GoogleProvider({
