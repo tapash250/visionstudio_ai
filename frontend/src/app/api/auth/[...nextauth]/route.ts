@@ -6,6 +6,8 @@ import GitHubProvider from 'next-auth/providers/github';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import type { JWT } from 'next-auth/jwt';
+import type { User, Account, SessionStrategy } from 'next-auth';
 
 const prisma = new PrismaClient();
 
@@ -58,18 +60,18 @@ const authOptions = {
     error: '/auth/login',
   },
   session: {
-    strategy: 'jwt',
+    strategy: 'jwt' as SessionStrategy,
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account }: { token: JWT; user?: User; account?: Account | null }) {
       if (user) {
         token.id = user.id;
         token.accessToken = account?.access_token;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: JWT }) {
       if (token) {
         session.user.id = token.id as string;
         session.accessToken = token.accessToken as string;
@@ -78,7 +80,7 @@ const authOptions = {
     },
   },
   events: {
-    async signIn({ user, account }) {
+    async signIn({ user, account }: { user: User; account?: Account | null; profile?: any; isNewUser?: boolean }) {
       // Track device on sign in
       if (user?.id) {
         // Device tracking logic
