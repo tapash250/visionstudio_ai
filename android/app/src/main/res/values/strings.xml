@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VisionStudio AI</string>
+    <string name="shell_tagline">Text to Image · Image Edit · Video Studio</string>
+    <string name="shell_engines_header">ENGINE SLOTS</string>
+    <string name="shell_slot_ready">Ready</string>
+    <string name="shell_slot_unconfigured">Not configured</string>
+</resources>

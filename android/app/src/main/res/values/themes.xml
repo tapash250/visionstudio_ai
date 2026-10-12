@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="studio_onyx">#FF0A0B0E</color>
+
+    <style name="Theme.VisionStudio" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/studio_onyx</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.VisionStudio.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/studio_onyx</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.VisionStudio</item>
+    </style>
+</resources>
