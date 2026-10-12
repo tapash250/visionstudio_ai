@@ -1,0 +1,30 @@
+package com.visionstudio.core.mcp
+
+/**
+ * Connection parameters for an MCP server using the HTTP+SSE transport (spec 2024-11-05).
+ *
+ * @property sseUrl the event-stream URL; the server announces the POST endpoint on it.
+ * @property headers extra headers (typically `Authorization`) sent on both the stream and POSTs.
+ */
+data class McpServerConfig(
+    val sseUrl: String,
+    val headers: Map<String, String> = emptyMap(),
+    val connectTimeoutMillis: Long = DEFAULT_CONNECT_TIMEOUT_MILLIS,
+    val requestTimeoutMillis: Long = DEFAULT_REQUEST_TIMEOUT_MILLIS,
+) {
+    init {
+        require(sseUrl.startsWith("https://") || sseUrl.startsWith("http://")) {
+            "sseUrl must be an http(s) URL"
+        }
+        require(connectTimeoutMillis > 0 && requestTimeoutMillis > 0) { "Timeouts must be positive" }
+    }
+
+    /** Redacted so credentials never reach logs or crash reports. */
+    override fun toString(): String =
+        "McpServerConfig(sseUrl=$sseUrl, headers=${headers.keys}, connect=$connectTimeoutMillis, request=$requestTimeoutMillis)"
+
+    companion object {
+        const val DEFAULT_CONNECT_TIMEOUT_MILLIS: Long = 15_000
+        const val DEFAULT_REQUEST_TIMEOUT_MILLIS: Long = 120_000
+    }
+}

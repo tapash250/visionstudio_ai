@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Neon-style border: a crisp core stroke plus [layers] progressively wider, fainter strokes
+ * Neon-style border: a crisp core stroke (omitted when [width] is 0) plus [layers] progressively wider, fainter strokes
  * that read as an outer glow. Uses plain strokes (no BlurMaskFilter) so it renders identically
  * on every API level with hardware acceleration.
  *
@@ -46,7 +46,7 @@ fun Modifier.glowingBorder(
                 }
             }
             drawContent()
-            drawOutline(outline, brush = brush, style = coreStroke)
+            if (corePx > 0f) drawOutline(outline, brush = brush, style = coreStroke)
         }
     }
 }

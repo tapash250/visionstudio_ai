@@ -35,6 +35,9 @@ dependencies {
     implementation(projects.core.common)
     implementation(projects.core.model)
     implementation(projects.core.designsystem)
+    implementation(projects.core.security)
+    implementation(projects.core.network)
+    implementation(projects.feature.settings)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
