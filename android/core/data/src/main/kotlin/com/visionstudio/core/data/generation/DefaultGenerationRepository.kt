@@ -5,9 +5,8 @@ import com.visionstudio.core.common.dispatchers.IoDispatcher
 import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.common.result.getOrThrow
 import com.visionstudio.core.data.media.MediaFileStore
-import com.visionstudio.core.data.media.MediaInspector
+import com.visionstudio.core.data.media.MediaSink
 import com.visionstudio.core.database.GenerationHistoryDao
-import com.visionstudio.core.database.toEntity
 import com.visionstudio.core.database.toMediaItem
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.model.GenerationParameters
@@ -39,7 +38,7 @@ internal class DefaultGenerationRepository @Inject constructor(
     private val engineFactory: EngineFactory,
     private val dao: GenerationHistoryDao,
     private val files: MediaFileStore,
-    private val inspector: MediaInspector,
+    private val sink: MediaSink,
     @IoDispatcher private val io: CoroutineDispatcher,
     @DefaultDispatcher private val default: CoroutineDispatcher,
 ) : GenerationRepository {
@@ -71,7 +70,7 @@ internal class DefaultGenerationRepository @Inject constructor(
             send(GenerationEvent.Progress(fraction = 1f, message = "Saving"))
             val createdAt = System.currentTimeMillis()
             val items = outputs.take(MAX_OUTPUTS_PER_TASK).mapIndexed { index, output ->
-                persist(engine, output, slot, taskId, parameters, createdAt + index)
+                sink.store(engine, output, slot, taskId, parameters, createdAt + index)
             }
             send(GenerationEvent.Completed(items))
         } finally {
@@ -111,58 +110,6 @@ internal class DefaultGenerationRepository @Inject constructor(
         }
     }
 
-    private suspend fun persist(
-        engine: GenerationEngine,
-        output: EngineOutput,
-        slot: EngineSlot,
-        taskId: String,
-        parameters: GenerationParameters,
-        createdAt: Long,
-    ): MediaItem {
-        val id = UUID.randomUUID().toString()
-        val type = if (output.isVideo) MediaType.VIDEO else MediaType.IMAGE
-        val file = files.newFile(id, extensionFor(output.mimeType, type))
-        val size = try {
-            engine.downloadTo(output, file)
-        } catch (failure: Exception) {
-            withContext(NonCancellable) { file.delete() }
-            throw failure
-        }
-        val facts = try {
-            when (type) {
-                MediaType.IMAGE -> inspector.inspectImage(file)
-                MediaType.VIDEO -> {
-                    val expected = parameters.aspectRatio.dimensionsFor(longEdge = VIDEO_LONG_EDGE, alignment = VIDEO_ALIGNMENT)
-                    inspector.inspectVideo(
-                        file,
-                        expected.width,
-                        expected.height,
-                        (parameters.durationSeconds ?: DEFAULT_VIDEO_SECONDS) * MILLIS_PER_SECOND,
-                    )
-                }
-            }
-        } catch (failure: Exception) {
-            withContext(NonCancellable) { file.delete() }
-            throw failure
-        }
-        val item = MediaItem(
-            id = id,
-            taskId = taskId,
-            type = type,
-            localUri = files.uriOf(file),
-            mimeType = output.mimeType,
-            width = facts.width,
-            height = facts.height,
-            durationMillis = if (type == MediaType.VIDEO) facts.durationMillis else null,
-            sizeBytes = size,
-            blurHash = facts.blurHash,
-            parameters = parameters,
-            createdAtEpochMillis = createdAt,
-        )
-        dao.upsert(withContext(default) { item.toEntity(slot) })
-        return item
-    }
-
     override fun observeRecent(slot: EngineSlot, limit: Int): Flow<List<MediaItem>> =
         dao.observeRecent(slot.name, limit).map { rows -> rows.map { it.toMediaItem() } }.flowOn(default)
 
@@ -174,14 +121,6 @@ internal class DefaultGenerationRepository @Inject constructor(
         files.delete(item.localUri)
     }
 
-    private fun extensionFor(mime: String, type: MediaType): String = when (mime) {
-        "image/jpeg" -> "jpg"
-        "image/webp" -> "webp"
-        "video/webm" -> "webm"
-        "video/quicktime" -> "mov"
-        else -> type.fileExtension
-    }
-
     private companion object {
         const val MAX_OUTPUTS_PER_TASK = 4
         const val MILLIS_PER_SECOND = 1_000L
@@ -189,8 +128,5 @@ internal class DefaultGenerationRepository @Inject constructor(
         const val MAX_POLL_MILLIS = 4_000L
         const val BACKOFF_FACTOR = 1.5
         const val MIN_POLL_BUDGET_MILLIS = 5 * 60_000L
-        const val VIDEO_LONG_EDGE = 1280
-        const val VIDEO_ALIGNMENT = 16
-        const val DEFAULT_VIDEO_SECONDS = 5
     }
 }

@@ -42,9 +42,13 @@ dependencies {
     implementation(projects.feature.settings)
     implementation(projects.feature.t2i)
     implementation(projects.feature.imageedit)
+    implementation(projects.feature.video)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
 }

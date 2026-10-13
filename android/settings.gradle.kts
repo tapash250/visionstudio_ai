@@ -41,6 +41,7 @@ include(":core:data")
 include(":feature:settings")
 include(":feature:t2i")
 include(":feature:imageedit")
+include(":feature:video")
 
 // Upcoming modules are registered here as their tickets land:
-//   :feature:video (3.3)   :feature:gallery (4.1)
+//   :feature:gallery (4.1)

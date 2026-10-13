@@ -1,5 +1,6 @@
 package com.visionstudio.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,10 +41,21 @@ import com.visionstudio.core.designsystem.theme.VisionStudioTheme
 import com.visionstudio.feature.imageedit.EditRoute
 import com.visionstudio.feature.settings.SettingsRoute
 import com.visionstudio.feature.t2i.ImagineRoute
+import com.visionstudio.feature.video.VideoDeepLink
+import com.visionstudio.feature.video.VideoRoute
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /** Where a launching intent (such as a "video ready" notification) wants to go; consumed by the shell. */
+    private val openRequest = mutableStateOf<String?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openRequest.value = intent.getStringExtra(VideoDeepLink.EXTRA_OPEN)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -51,9 +64,13 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) openRequest.value = intent?.getStringExtra(VideoDeepLink.EXTRA_OPEN)
         setContent {
             VisionStudioTheme {
-                InterimShell()
+                InterimShell(
+                    openRequest = openRequest.value,
+                    onOpenRequestHandled = { openRequest.value = null },
+                )
             }
         }
     }
@@ -62,17 +79,25 @@ class MainActivity : ComponentActivity() {
 private enum class Studio(val label: String) {
     Imagine("Imagine"),
     Edit("Edit"),
+    Motion("Motion"),
 }
 
 /**
- * Temporary host: Imagine and Edit switch from a glass bar, and the Engine Room opens over the
+ * Temporary host: Imagine, Edit and Motion switch from a glass bar, and the Engine Room opens over the
  * top. Ticket 4.3 replaces this with the real bottom-navigation NavHost (Generate, Edit, Video,
  * Vault, Settings).
  */
 @Composable
-private fun InterimShell() {
+private fun InterimShell(openRequest: String?, onOpenRequestHandled: () -> Unit) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var studio by rememberSaveable { mutableStateOf(Studio.Imagine) }
+    LaunchedEffect(openRequest) {
+        if (openRequest == VideoDeepLink.OPEN_VIDEO) {
+            settingsOpen = false
+            studio = Studio.Motion
+        }
+        if (openRequest != null) onOpenRequestHandled()
+    }
     BackHandler(enabled = settingsOpen) { settingsOpen = false }
 
     AnimatedContent(
@@ -98,6 +123,7 @@ private fun InterimShell() {
                         when (current) {
                             Studio.Imagine -> ImagineRoute(onOpenSettings = { settingsOpen = true })
                             Studio.Edit -> EditRoute(onOpenSettings = { settingsOpen = true })
+                            Studio.Motion -> VideoRoute(onOpenSettings = { settingsOpen = true })
                         }
                     }
                 }
@@ -112,7 +138,7 @@ private fun InterimShell() {
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 40.dp, vertical = 8.dp),
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
                     )
                 }
             }

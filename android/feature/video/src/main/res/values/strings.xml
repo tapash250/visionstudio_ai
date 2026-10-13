@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Notifications -->
+    <string name="video_channel_progress">Video rendering</string>
+    <string name="video_channel_progress_desc">Shows progress while a video is being generated.</string>
+    <string name="video_channel_done">Video results</string>
+    <string name="video_channel_done_desc">Tells you when a video is ready or has failed.</string>
+    <string name="video_notif_rendering_title">Rendering your video</string>
+    <string name="video_notif_starting">Starting…</string>
+    <string name="video_notif_done_title">Your video is ready</string>
+    <string name="video_notif_failed_title">Video failed</string>
+
+    <!-- Screen -->
+    <string name="video_eyebrow">Motion</string>
+    <string name="video_engine_none">No engine</string>
+    <string name="video_open_settings">Engine settings</string>
+
+    <string name="video_mode_text">Text → Video</string>
+    <string name="video_mode_image">Image → Video</string>
+
+    <string name="video_empty_title">Bring a frame to life</string>
+    <string name="video_empty_body">Describe a shot, pick a camera move, and your video renders in the background. You can leave the app.</string>
+    <string name="video_unconfigured_title">Connect a video engine</string>
+    <string name="video_unconfigured_body">Motion needs a Video Studio provider. Add any REST or MCP engine in the Engine Room.</string>
+    <string name="video_unconfigured_action">Open Engine Room</string>
+
+    <string name="video_prompt_hint">A slow dolly through a neon-lit alley at night…</string>
+    <string name="video_photo_hint">Choose the first frame</string>
+    <string name="video_photo_change">Change photo</string>
+    <string name="video_photo_remove">Remove photo</string>
+    <string name="video_advanced_show">Show controls</string>
+    <string name="video_advanced_hide">Hide controls</string>
+    <string name="video_frame">Frame</string>
+    <string name="video_frame_from_photo">Frame follows your photo</string>
+    <string name="video_camera">Camera</string>
+    <string name="video_duration">Length</string>
+    <string name="video_seconds_short">%1$ds</string>
+
+    <string name="video_generate">Generate</string>
+    <string name="video_need_prompt">Describe the shot</string>
+    <string name="video_need_photo">Choose a photo first</string>
+    <string name="video_queued_toast">Rendering in the background</string>
+
+    <string name="video_job_status_queued">Waiting to start</string>
+    <string name="video_job_status_submitting">Sending to provider</string>
+    <string name="video_job_status_polling">Rendering</string>
+    <string name="video_job_status_downloading">Saving video</string>
+    <string name="video_job_failed">Render failed</string>
+    <string name="video_job_cancelled">Cancelled</string>
+    <string name="video_job_elapsed">%1$s elapsed</string>
+    <string name="video_job_cancel">Cancel</string>
+    <string name="video_job_retry">Try again</string>
+    <string name="video_job_dismiss">Dismiss</string>
+    <string name="video_job_leave_hint">Safe to leave the app. We’ll notify you.</string>
+    <string name="video_jobs">Renders</string>
+    <string name="video_recent">Recent</string>
+    <string name="video_tap_to_pause">Tap to pause or play</string>
+    <string name="video_duration_label">%1$d s</string>
+    <string name="video_player_description">Generated video, looping. %1$s</string>
+</resources>

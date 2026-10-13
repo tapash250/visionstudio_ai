@@ -20,4 +20,7 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.kotlinx.serialization.json)
+
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }
