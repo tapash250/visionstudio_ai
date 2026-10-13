@@ -5,7 +5,10 @@ import com.visionstudio.core.common.dispatchers.IoDispatcher
 import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.common.error.toVisionStudioException
 import com.visionstudio.core.model.EngineSlot
+import com.visionstudio.core.mcp.transport.SseEvent
+import com.visionstudio.core.mcp.transport.SseEventParser
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -26,6 +29,7 @@ import java.io.File
 import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -95,6 +99,47 @@ class RestHttpClient @Inject constructor(
     }
 
     /**
+     * Executes [request] and negotiates the response. A JSON body is parsed and returned. A
+     * `text/event-stream` body is read incrementally, each parsed event is handed to [onEvent]
+     * as it arrives, and the function returns null when the stream ends.
+     */
+    suspend fun executeJsonOrEvents(
+        request: Request,
+        slot: EngineSlot?,
+        onEvent: suspend (SseEvent) -> Unit,
+    ): JsonElement? {
+        val streamed = withContext(io) {
+            val response = try {
+                okHttpClient.newCall(request).await()
+            } catch (failure: IOException) {
+                throw failure.toVisionStudioException()
+            }
+            response.use {
+                if (!it.isSuccessful) {
+                    HttpResult(it.code, it.body?.bytes() ?: ByteArray(0), it.header("Content-Type")).throwIfError(slot)
+                }
+                val contentType = it.header("Content-Type").orEmpty()
+                if (!contentType.startsWith(EVENT_STREAM, ignoreCase = true)) {
+                    return@withContext it.body?.string().orEmpty()
+                }
+                val source = it.body?.source() ?: return@withContext null
+                val parser = SseEventParser()
+                try {
+                    while (true) {
+                        coroutineContext.ensureActive()
+                        val line = source.readUtf8Line() ?: break
+                        parser.feedLine(line)?.let { event -> onEvent(event) }
+                    }
+                } catch (failure: IOException) {
+                    throw failure.toVisionStudioException()
+                }
+                null
+            }
+        }
+        return streamed?.let { parseJson(it) }
+    }
+
+    /**
      * Streams a response body to [target] through a temporary sibling file, then renames it,
      * so a cancelled or failed download never leaves a truncated file at [target].
      */
@@ -129,6 +174,7 @@ class RestHttpClient @Inject constructor(
 
     companion object {
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        const val EVENT_STREAM: String = "text/event-stream"
         private const val DOWNLOAD_BUFFER = 64 * 1024
     }
 }

@@ -4,11 +4,17 @@ import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.model.EngineConfig
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.network.engine.ConnectionProbe
+import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.JobStatus
 import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
+import com.visionstudio.core.network.engine.decodePreviewPayload
 import com.visionstudio.core.network.engine.extractOutputs
+import com.visionstudio.core.network.engine.previewString
+import com.visionstudio.core.network.engine.streamFraction
+import com.visionstudio.core.network.engine.stringField
+import com.visionstudio.core.mcp.transport.SseEvent
 import com.visionstudio.core.network.engine.joinUrl
 import com.visionstudio.core.network.engine.outputDimensions
 import com.visionstudio.core.network.engine.promptWithDirectives
@@ -59,7 +65,7 @@ class CustomRestEngine(
         }.getOrElse { it.toFailedProbe(latency) }
     }
 
-    override suspend fun submit(request: EngineRequest, onProgress: (Float) -> Unit): Submission {
+    override suspend fun submit(request: EngineRequest, onProgress: (EngineProgress) -> Unit): Submission {
         val params = request.parameters
         val dimensions = params.outputDimensions(request.slot)
         val payload = buildJsonObject {
@@ -79,7 +85,21 @@ class CustomRestEngine(
             request.sourceImage?.let { put("image", it.dataUri()) }
             request.mask?.let { put("mask", it.dataUri()) }
         }
-        val response = http.executeJson(authorized(config.endpointUrl).post(http.jsonBody(payload)).build(), config.slot)
+        var streamedResult: JsonElement? = null
+        val request = authorized(config.endpointUrl)
+            .header("Accept", "${RestHttpClient.EVENT_STREAM}, application/json")
+            .post(http.jsonBody(payload))
+            .build()
+        val response = http.executeJsonOrEvents(request, config.slot) { event ->
+            handleStreamEvent(event)?.let { update ->
+                when (update) {
+                    is StreamUpdate.Progress -> onProgress(update.progress)
+                    is StreamUpdate.Result -> streamedResult = update.json
+                }
+            }
+        } ?: return streamedResult
+            ?.let { Submission.Completed(extractOutputs(it, defaultMime)) }
+            ?: throw VisionStudioException.ProtocolException(null, "Event stream ended without a result")
 
         val outputs = extractOutputs(response, defaultMime)
         if (outputs.isNotEmpty()) return Submission.Completed(outputs)
@@ -92,6 +112,41 @@ class CustomRestEngine(
                 id = jobId,
                 statusUrl = envelope.string("status_url") ?: joinUrl(config.endpointUrl, jobId),
                 resultUrl = envelope.string("result_url") ?: envelope.string("response_url"),
+            ),
+        )
+    }
+
+    private sealed interface StreamUpdate {
+        class Progress(val progress: EngineProgress) : StreamUpdate
+        class Result(val json: JsonElement) : StreamUpdate
+    }
+
+    /**
+     * Streaming protocol for self-hosted backends: each `data:` frame is a JSON object. Frames
+     * with media outputs (or `event: result|complete|done`) carry the final result. Frames with
+     * `progress`/`step` and an optional `preview` image report intermediate state. An `error`
+     * event or failed `status` aborts the generation.
+     */
+    private suspend fun handleStreamEvent(event: SseEvent): StreamUpdate? {
+        val data = event.data.trim()
+        if (data.isEmpty() || data == "[DONE]") return null
+        val json = runCatching { http.parseJson(data) }.getOrNull() as? JsonObject ?: return null
+        val status = json.stringField("status")?.lowercase()
+        if (event.event == "error" || status in FAILED_STATES) {
+            throw VisionStudioException.ProviderException(
+                null,
+                json.stringField("error") ?: json.stringField("message") ?: "Generation failed",
+            )
+        }
+        val outputs = extractOutputs(json, defaultMime)
+        if (outputs.isNotEmpty() && (event.event in RESULT_EVENTS || status in DONE_STATES || json.streamFraction() == null)) {
+            return StreamUpdate.Result(json)
+        }
+        return StreamUpdate.Progress(
+            EngineProgress(
+                fraction = json.streamFraction(),
+                message = json.stringField("message") ?: status,
+                preview = json.previewString()?.let(::decodePreviewPayload),
             ),
         )
     }
@@ -121,6 +176,7 @@ class CustomRestEngine(
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
     private companion object {
+        val RESULT_EVENTS = setOf("result", "complete", "completed", "done")
         val DONE_STATES = setOf("completed", "succeeded", "success", "done", "finished")
         val FAILED_STATES = setOf("failed", "error", "cancelled", "canceled")
         const val HTTP_UNAUTHORIZED = 401

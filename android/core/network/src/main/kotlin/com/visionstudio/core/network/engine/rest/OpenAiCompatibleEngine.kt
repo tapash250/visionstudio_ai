@@ -5,12 +5,15 @@ import com.visionstudio.core.model.Dimensions
 import com.visionstudio.core.model.EngineConfig
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.network.engine.ConnectionProbe
+import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.JobStatus
 import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
 import com.visionstudio.core.network.engine.EngineOutput
+import com.visionstudio.core.network.engine.decodePreviewPayload
 import com.visionstudio.core.network.engine.extractOutputs
+import com.visionstudio.core.network.engine.stringField
 import com.visionstudio.core.network.engine.joinUrl
 import com.visionstudio.core.network.engine.outputDimensions
 import com.visionstudio.core.network.engine.promptWithDirectives
@@ -24,6 +27,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
@@ -72,27 +76,57 @@ class OpenAiCompatibleEngine(
         }.getOrElse { it.toFailedProbe(latency) }
     }
 
-    override suspend fun submit(request: EngineRequest, onProgress: (Float) -> Unit): Submission =
+    override suspend fun submit(request: EngineRequest, onProgress: (EngineProgress) -> Unit): Submission =
         when (request.slot) {
-            EngineSlot.TEXT_TO_IMAGE -> generateImage(request)
+            EngineSlot.TEXT_TO_IMAGE -> generateImage(request, onProgress)
             EngineSlot.IMAGE_EDIT -> editImage(request)
             EngineSlot.VIDEO_STUDIO -> createVideo(request)
         }
 
-    private suspend fun generateImage(request: EngineRequest): Submission {
+    private suspend fun generateImage(request: EngineRequest, onProgress: (EngineProgress) -> Unit): Submission {
         val params = request.parameters
+        val stream = supportsPartialImages
         val body = buildJsonObject {
             put("model", config.modelId)
             put("prompt", params.promptWithDirectives())
             put("n", 1)
             put("size", sizeFor(params.outputDimensions(request.slot)))
+            if (stream) {
+                put("stream", true)
+                put("partial_images", PARTIAL_IMAGES)
+            }
         }
-        val response = http.executeJson(
+        var final: EngineOutput? = null
+        val response = http.executeJsonOrEvents(
             authorized(joinUrl(base, "images/generations")).post(http.jsonBody(body)).build(),
             config.slot,
-        )
+        ) { event ->
+            val json = runCatching { http.parseJson(event.data) }.getOrNull() as? JsonObject ?: return@executeJsonOrEvents
+            val b64 = json.stringField("b64_json") ?: return@executeJsonOrEvents
+            when (json.stringField("type") ?: event.event) {
+                EVENT_PARTIAL -> {
+                    val index = (json["partial_image_index"] as? JsonPrimitive)?.intOrNull ?: 0
+                    onProgress(
+                        EngineProgress(
+                            fraction = ((index + 1f) / (PARTIAL_IMAGES + 1f)).coerceIn(0f, 1f),
+                            message = "Refining",
+                            preview = decodePreviewPayload(b64),
+                        ),
+                    )
+                }
+                EVENT_COMPLETED -> final = EngineOutput.Inline(b64, IMAGE_MIME)
+            }
+        }
+        if (response == null) {
+            val output = final ?: throw VisionStudioException.ProtocolException(null, "Image stream ended without a final image")
+            return Submission.Completed(listOf(output))
+        }
         return Submission.Completed(requireOutputs(extractOutputs(response, IMAGE_MIME)))
     }
+
+    /** Only api.openai.com gpt-image models stream partial images; compatible servers may reject the flags. */
+    private val supportsPartialImages: Boolean
+        get() = isOfficialApi && config.modelId.startsWith("gpt-image")
 
     private suspend fun editImage(request: EngineRequest): Submission {
         val source = requireSourceImage(request)
@@ -171,6 +205,9 @@ class OpenAiCompatibleEngine(
         const val IMAGE_MIME = "image/png"
         const val VIDEO_MIME = "video/mp4"
         const val PERCENT = 100.0
+        const val PARTIAL_IMAGES = 2
+        const val EVENT_PARTIAL = "image_generation.partial_image"
+        const val EVENT_COMPLETED = "image_generation.completed"
         val OFFICIAL_IMAGE_SIZES = listOf(Dimensions(1024, 1024), Dimensions(1536, 1024), Dimensions(1024, 1536))
     }
 }

@@ -18,8 +18,11 @@ interface GenerationEngine {
     /** Lightweight authenticated round-trip used by Settings "Test Connection". Never throws. */
     suspend fun testConnection(): ConnectionProbe
 
-    /** [onProgress] receives fractions in 0..1 when the provider streams progress. */
-    suspend fun submit(request: EngineRequest, onProgress: (Float) -> Unit = {}): Submission
+    /**
+     * [onProgress] receives streamed updates (fraction, status text, low-resolution previews)
+     * when the provider supports them. It is invoked from I/O threads and must not block.
+     */
+    suspend fun submit(request: EngineRequest, onProgress: (EngineProgress) -> Unit = {}): Submission
 
     suspend fun poll(job: RemoteJob): JobStatus
 
@@ -41,6 +44,17 @@ class BinaryPayload(val bytes: ByteArray, val mimeType: String) {
             "video/mp4" -> "mp4"
             else -> "png"
         }
+}
+
+/** An intermediate update while a provider renders. [preview] is a low-fidelity latent decode. */
+class EngineProgress(
+    val fraction: Float? = null,
+    val message: String? = null,
+    val preview: BinaryPayload? = null,
+) {
+    init {
+        fraction?.let { require(it in 0f..1f) { "fraction must be in 0..1, was $it" } }
+    }
 }
 
 data class EngineRequest(

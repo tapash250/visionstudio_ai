@@ -468,11 +468,13 @@ class McpClient internal constructor(
     }
 
     private fun failInFlight(error: VisionStudioException) {
+        // Publish the failed state before waking callers, so anyone handling the error
+        // already observes State.Failed (not a stale Ready) and can reconnect.
+        if (_state.value is State.Ready) _state.value = State.Failed(error)
         endpoint.completeExceptionally(error)
         val inFlight = pending.values.toList()
         pending.clear()
         inFlight.forEach { it.completeExceptionally(error) }
-        if (_state.value is State.Ready) _state.value = State.Failed(error)
     }
 
     private suspend fun teardownStream(error: VisionStudioException) {

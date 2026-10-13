@@ -9,6 +9,7 @@ import com.visionstudio.core.mcp.protocol.McpTool
 import com.visionstudio.core.mcp.protocol.ToolContent
 import com.visionstudio.core.network.engine.ConnectionProbe
 import com.visionstudio.core.network.engine.EngineOutput
+import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.GenerationEngine
 import com.visionstudio.core.network.engine.JobStatus
@@ -83,7 +84,7 @@ class McpGenerationEngine(
         }.getOrElse { it.toFailedProbe(latency) }
     }
 
-    override suspend fun submit(request: EngineRequest, onProgress: (Float) -> Unit): Submission {
+    override suspend fun submit(request: EngineRequest, onProgress: (EngineProgress) -> Unit): Submission {
         client.connect()
         val tool = resolveTool()
         val arguments = withContext(defaultDispatcher) { buildArguments(request, tool) }
@@ -91,7 +92,7 @@ class McpGenerationEngine(
             name = toolName,
             arguments = arguments,
             timeoutMillis = config.requestTimeoutSeconds * MILLIS_PER_SECOND,
-            onProgress = { progress -> progress.fraction?.let(onProgress) },
+            onProgress = { progress -> onProgress(EngineProgress(progress.fraction, progress.message)) },
         )
         if (result.isError) {
             throw VisionStudioException.ProviderException(null, result.text.ifBlank { "MCP tool '$toolName' reported an error" })

@@ -15,5 +15,6 @@ dependencies {
     api(libs.androidx.compose.runtime)
     api(libs.androidx.compose.animation)
     api(libs.androidx.compose.material.icons.extended)
+    implementation(projects.core.common)
     implementation(libs.androidx.core.ktx)
 }

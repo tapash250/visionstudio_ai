@@ -34,9 +34,12 @@ include(":core:designsystem")
 include(":core:security")
 include(":core:mcp")
 include(":core:network")
+include(":core:database")
+include(":core:data")
 
 // Feature layer
 include(":feature:settings")
+include(":feature:t2i")
 
 // Upcoming modules are registered here as their tickets land:
-//   :feature:t2i (3.1)   :feature:imageedit (3.2)   :feature:video (3.3)   :feature:gallery (4.1)
+//   :feature:imageedit (3.2)   :feature:video (3.3)   :feature:gallery (4.1)

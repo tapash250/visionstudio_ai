@@ -4,6 +4,7 @@ import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.model.EngineConfig
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.network.engine.ConnectionProbe
+import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.JobStatus
 import com.visionstudio.core.network.engine.RemoteJob
@@ -69,7 +70,7 @@ class FalQueueEngine(
         }.getOrElse { it.toFailedProbe(latency) }
     }
 
-    override suspend fun submit(request: EngineRequest, onProgress: (Float) -> Unit): Submission {
+    override suspend fun submit(request: EngineRequest, onProgress: (EngineProgress) -> Unit): Submission {
         val params = request.parameters
         val dimensions = params.outputDimensions(request.slot)
         val input = buildJsonObject {

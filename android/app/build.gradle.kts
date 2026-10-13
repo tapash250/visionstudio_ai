@@ -37,7 +37,10 @@ dependencies {
     implementation(projects.core.designsystem)
     implementation(projects.core.security)
     implementation(projects.core.network)
+    implementation(projects.core.database)
+    implementation(projects.core.data)
     implementation(projects.feature.settings)
+    implementation(projects.feature.t2i)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
