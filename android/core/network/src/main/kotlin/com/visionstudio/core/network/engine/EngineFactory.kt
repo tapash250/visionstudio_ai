@@ -45,7 +45,7 @@ class EngineFactory @Inject constructor(
         validate(config, apiKey)
         return when (config.protocol) {
             ProviderProtocol.REST -> when (config.restDialect) {
-                RestDialect.OPENAI_COMPATIBLE -> OpenAiCompatibleEngine(config, apiKey, http, ioDispatcher)
+                RestDialect.OPENAI_COMPATIBLE -> OpenAiCompatibleEngine(config, apiKey, http, ioDispatcher, defaultDispatcher)
                 RestDialect.FAL_QUEUE -> FalQueueEngine(config, apiKey, http, ioDispatcher)
                 RestDialect.CUSTOM -> CustomRestEngine(config, apiKey, http, ioDispatcher)
             }

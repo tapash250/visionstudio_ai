@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="edit_eyebrow">Edit</string>
+    <string name="edit_engine_none">No engine</string>
+    <string name="edit_open_settings">Engine settings</string>
+
+    <string name="edit_pick_title">Repaint any part of a photo</string>
+    <string name="edit_pick_body">Choose a photo, paint over what you want to change, then describe what should appear there.</string>
+    <string name="edit_pick_action">Choose photo</string>
+    <string name="edit_loading">Preparing photo…</string>
+    <string name="edit_canvas_description">Photo canvas. Drag to paint the area to change.</string>
+
+    <string name="edit_tool_brush">Brush</string>
+    <string name="edit_tool_eraser">Eraser</string>
+    <string name="edit_brush_size">Brush size</string>
+    <string name="edit_brush_size_value">%1$d%%</string>
+    <string name="edit_undo">Undo</string>
+    <string name="edit_redo">Redo</string>
+    <string name="edit_clear">Clear mask</string>
+    <string name="edit_change_photo">Change photo</string>
+
+    <string name="edit_prompt_hint">What should appear in the painted area…</string>
+    <string name="edit_strength">Strength</string>
+    <string name="edit_repaint">Repaint</string>
+    <string name="edit_paint_first">Paint an area first</string>
+    <string name="edit_rendering">Repainting %1$d%%</string>
+    <string name="edit_rendering_indeterminate">Repainting…</string>
+    <string name="edit_cancel">Cancel</string>
+    <string name="edit_queue_position">Queued · position %1$d</string>
+    <string name="edit_working">Working</string>
+    <string name="edit_dismiss">Dismiss</string>
+
+    <string name="edit_result_before">Before</string>
+    <string name="edit_result_after">After</string>
+    <string name="edit_keep_editing">Keep editing</string>
+    <string name="edit_use_result">Use as new photo</string>
+    <string name="edit_compare_description">Before and after comparison. Drag to reveal.</string>
+</resources>

@@ -22,6 +22,8 @@ import com.visionstudio.core.network.engine.timed
 import com.visionstudio.core.network.engine.toFailedProbe
 import com.visionstudio.core.network.http.RestHttpClient
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -48,6 +50,7 @@ class OpenAiCompatibleEngine(
     apiKey: String?,
     http: RestHttpClient,
     ioDispatcher: CoroutineDispatcher,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : RestEngineBase(config, apiKey, http, ioDispatcher) {
 
     private val base = config.endpointUrl.trimEnd('/')
@@ -139,7 +142,9 @@ class OpenAiCompatibleEngine(
             .addFormDataPart("image", "source.${source.fileExtension}", source.bytes.toRequestBody(source.mimeType.toMediaType()))
             .apply {
                 request.mask?.let { mask ->
-                    addFormDataPart("mask", "mask.png", mask.bytes.toRequestBody(mask.mimeType.toMediaType()))
+                    // OpenAI marks the repaint region with transparency; convert from white = repaint.
+                    val alphaMask = withContext(defaultDispatcher) { OpenAiMask.toAlphaMask(mask.bytes) }
+                    addFormDataPart("mask", "mask.png", alphaMask.toRequestBody(PNG_MEDIA_TYPE))
                 }
             }
             .build()
@@ -203,6 +208,7 @@ class OpenAiCompatibleEngine(
 
     private companion object {
         const val IMAGE_MIME = "image/png"
+        val PNG_MEDIA_TYPE = "image/png".toMediaType()
         const val VIDEO_MIME = "video/mp4"
         const val PERCENT = 100.0
         const val PARTIAL_IMAGES = 2

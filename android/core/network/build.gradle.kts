@@ -23,4 +23,5 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.robolectric)
 }

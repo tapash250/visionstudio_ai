@@ -1,6 +1,8 @@
 package com.visionstudio.core.model
 
 import kotlinx.serialization.Serializable
+import kotlin.math.abs
+import kotlin.math.ln
 import kotlin.math.roundToInt
 
 /**
@@ -57,6 +59,13 @@ enum class AspectRatio(
         const val DEFAULT_ALIGNMENT: Int = 64
 
         fun fromLabel(label: String): AspectRatio? = entries.firstOrNull { it.label == label }
+
+        /** The preset whose shape is closest to [width] × [height], compared on a log scale so 2:1 and 1:2 are equally far from 1:1. */
+        fun closestTo(width: Int, height: Int): AspectRatio {
+            require(width > 0 && height > 0) { "Dimensions must be positive, was ${width}x$height" }
+            val target = ln(width.toDouble() / height)
+            return entries.minBy { abs(ln(it.widthUnits.toDouble() / it.heightUnits) - target) }
+        }
     }
 }
 

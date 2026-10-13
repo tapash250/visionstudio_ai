@@ -41,6 +41,7 @@ dependencies {
     implementation(projects.core.data)
     implementation(projects.feature.settings)
     implementation(projects.feature.t2i)
+    implementation(projects.feature.imageedit)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

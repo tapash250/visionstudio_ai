@@ -40,6 +40,7 @@ include(":core:data")
 // Feature layer
 include(":feature:settings")
 include(":feature:t2i")
+include(":feature:imageedit")
 
 // Upcoming modules are registered here as their tickets land:
-//   :feature:imageedit (3.2)   :feature:video (3.3)   :feature:gallery (4.1)
+//   :feature:video (3.3)   :feature:gallery (4.1)

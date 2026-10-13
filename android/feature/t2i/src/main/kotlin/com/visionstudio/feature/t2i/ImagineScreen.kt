@@ -23,9 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -49,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.visionstudio.core.designsystem.component.AuroraBackground
 import com.visionstudio.core.designsystem.component.BlurHashImage
+import com.visionstudio.core.designsystem.component.EngineChip
 import com.visionstudio.core.designsystem.component.SectionHeader
 import com.visionstudio.core.designsystem.haptics.HapticPattern
 import com.visionstudio.core.designsystem.haptics.tactileClickable
@@ -58,10 +55,8 @@ import com.visionstudio.core.designsystem.modifier.staggeredEntrance
 import com.visionstudio.core.designsystem.theme.StudioCyan
 import com.visionstudio.core.designsystem.theme.StudioIndigoBright
 import com.visionstudio.core.designsystem.theme.StudioShapes
-import com.visionstudio.core.designsystem.theme.StudioSuccess
 import com.visionstudio.core.designsystem.theme.StudioTextSecondary
 import com.visionstudio.core.designsystem.theme.StudioViolet
-import com.visionstudio.core.designsystem.theme.StudioWarning
 import com.visionstudio.core.designsystem.theme.VisionStudioTheme
 import com.visionstudio.core.model.MediaItem
 import com.visionstudio.feature.t2i.ui.ModernPromptDock
@@ -150,34 +145,13 @@ private fun Header(engine: EngineBadge, onOpenSettings: () -> Unit, modifier: Mo
                 modifier = Modifier.semantics { heading() },
             )
         }
-        val settingsLabel = stringResource(R.string.t2i_open_settings)
-        Row(
-            modifier = Modifier
-                .frostedGlass(
-                    shape = StudioShapes.Chip,
-                    border = SolidColor((if (engine.configured) StudioSuccess else StudioWarning).copy(alpha = 0.4f)),
-                )
-                .semantics { contentDescription = settingsLabel }
-                .tactileClickable(haptic = HapticPattern.Click, role = Role.Button, onClick = onOpenSettings)
-                .padding(start = 12.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(8.dp)
-                    .clip(StudioShapes.Orb)
-                    .frostedGlass(shape = StudioShapes.Orb, fill = if (engine.configured) StudioSuccess else StudioWarning),
-            )
-            Text(
-                text = engine.label.ifBlank { stringResource(R.string.t2i_engine_none) },
-                style = VisionStudioTheme.typography.monoSmall,
-                color = StudioTextSecondary,
-                maxLines = 1,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Icon(Icons.Rounded.Tune, contentDescription = null, tint = StudioTextSecondary, modifier = Modifier.size(16.dp))
-        }
+        EngineChip(
+            configured = engine.configured,
+            label = engine.label,
+            emptyLabel = stringResource(R.string.t2i_engine_none),
+            onClick = onOpenSettings,
+            onClickLabel = stringResource(R.string.t2i_open_settings),
+        )
     }
 }
 

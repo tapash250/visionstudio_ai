@@ -11,7 +11,6 @@ import com.visionstudio.core.data.media.MediaInspector
 import com.visionstudio.core.model.EngineConfig
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.model.GenerationParameters
-import com.visionstudio.core.model.ProviderProtocol
 import com.visionstudio.core.security.SecurePreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -177,14 +176,7 @@ class T2iViewModel @Inject constructor(
     private fun restingPhase(state: T2iUiState): StagePhase =
         state.recent.firstOrNull()?.let { StagePhase.Showing(it, fresh = false) } ?: StagePhase.Empty
 
-    private fun EngineConfig.toBadge(): EngineBadge {
-        if (!isConfigured) return EngineBadge(configured = false, label = "")
-        val label = when (protocol) {
-            ProviderProtocol.MCP -> "MCP · ${mcpToolName.orEmpty()}"
-            ProviderProtocol.REST -> modelId.substringAfterLast('/')
-        }
-        return EngineBadge(configured = true, label = label)
-    }
+    private fun EngineConfig.toBadge(): EngineBadge = EngineBadge(configured = isConfigured, label = shortLabel)
 
     private fun VisionStudioException.userMessage(): String = when (this) {
         is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in the Engine Room."

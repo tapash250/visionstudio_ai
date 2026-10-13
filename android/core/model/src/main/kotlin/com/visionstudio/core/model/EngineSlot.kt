@@ -39,10 +39,21 @@ data class EngineConfig(
         }
     }
 
+    /** REST engines are addressed by model ID; MCP engines are addressed by tool name and the model ID is optional. */
     val isConfigured: Boolean
         get() = endpointUrl.isNotBlank() &&
-            modelId.isNotBlank() &&
-            (protocol != ProviderProtocol.MCP || !mcpToolName.isNullOrBlank())
+            when (protocol) {
+                ProviderProtocol.REST -> modelId.isNotBlank()
+                ProviderProtocol.MCP -> !mcpToolName.isNullOrBlank()
+            }
+
+    /** Compact engine name for chips and headers, empty when the slot is not configured. */
+    val shortLabel: String
+        get() = when {
+            !isConfigured -> ""
+            protocol == ProviderProtocol.MCP -> "MCP · ${mcpToolName.orEmpty()}"
+            else -> modelId.substringAfterLast('/')
+        }
 
     companion object {
         const val DEFAULT_TIMEOUT_SECONDS: Int = 120
