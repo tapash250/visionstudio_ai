@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="t2i_eyebrow">Imagine</string>
+    <string name="t2i_engine_none">No engine</string>
+    <string name="t2i_open_settings">Engine settings</string>
+
+    <string name="t2i_empty_title">Speak it into light</string>
+    <string name="t2i_empty_body">Describe a scene below. Every render is saved to your Vault with its seed and settings.</string>
+    <string name="t2i_unconfigured_title">Connect an engine first</string>
+    <string name="t2i_unconfigured_body">Imagine needs a Text-to-Image provider. Add any REST or MCP engine in the Engine Room.</string>
+    <string name="t2i_unconfigured_action">Open Engine Room</string>
+
+    <string name="t2i_prompt_hint">A glass koi drifting through neon rain…</string>
+    <string name="t2i_negative">Negative prompt</string>
+    <string name="t2i_negative_hint">blurry, watermark, extra fingers</string>
+    <string name="t2i_aspect">Frame</string>
+    <string name="t2i_steps">Steps</string>
+    <string name="t2i_guidance">Guidance</string>
+    <string name="t2i_seed">Seed</string>
+    <string name="t2i_seed_random">Random</string>
+    <string name="t2i_seed_hint">e.g. 421337</string>
+    <string name="t2i_advanced_show">Show controls</string>
+    <string name="t2i_advanced_hide">Hide controls</string>
+
+    <string name="t2i_generate">Generate</string>
+    <string name="t2i_rendering">Rendering %1$d%%</string>
+    <string name="t2i_rendering_indeterminate">Rendering…</string>
+    <string name="t2i_cancel">Cancel</string>
+    <string name="t2i_retry">Try again</string>
+    <string name="t2i_failed_title">The render didn’t make it</string>
+    <string name="t2i_queue_position">Queued · position %1$d</string>
+    <string name="t2i_dreaming">Dreaming</string>
+    <string name="t2i_recent">Recent</string>
+    <string name="t2i_seed_value">seed %1$s</string>
+</resources>

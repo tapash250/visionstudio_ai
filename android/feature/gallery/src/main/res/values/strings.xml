@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="vault_eyebrow">Vault</string>
+    <string name="vault_title">Your creations</string>
+    <string name="vault_count">%1$d items</string>
+
+    <string name="filter_all">All</string>
+    <string name="filter_images">Images</string>
+    <string name="filter_videos">Videos</string>
+
+    <string name="day_today">Today</string>
+    <string name="day_yesterday">Yesterday</string>
+    <string name="day_items">%1$d</string>
+
+    <string name="vault_empty_title">Nothing here yet</string>
+    <string name="vault_empty_body">Everything you create in Imagine, Edit and Motion is kept here, along with the exact settings that made it.</string>
+    <string name="vault_filter_empty_images">No images yet</string>
+    <string name="vault_filter_empty_videos">No videos yet</string>
+    <string name="vault_filter_empty_hint">Try another filter.</string>
+
+    <string name="tile_video_description">Video, %1$s. %2$s</string>
+    <string name="tile_image_description">Image. %1$s</string>
+
+    <string name="sheet_prompt">Prompt</string>
+    <string name="sheet_negative">Negative prompt</string>
+    <string name="sheet_details">Details</string>
+    <string name="sheet_copy_prompt">Copy prompt</string>
+    <string name="sheet_copied">Copied</string>
+    <string name="sheet_delete">Delete</string>
+    <string name="sheet_delete_confirm">Tap again to delete forever</string>
+    <string name="sheet_close">Close</string>
+    <string name="sheet_preview_description">Preview. %1$s</string>
+
+    <string name="field_seed">Seed</string>
+    <string name="field_model">Model</string>
+    <string name="field_created">Created</string>
+    <string name="field_size">Size</string>
+    <string name="field_frame">Frame</string>
+    <string name="field_duration">Length</string>
+    <string name="field_camera">Camera</string>
+    <string name="field_steps">Steps</string>
+    <string name="field_guidance">Guidance</string>
+    <string name="field_file_size">File size</string>
+    <string name="field_source">Started from</string>
+    <string name="field_source_photo">A photo</string>
+    <string name="field_copy_value">Copy %1$s</string>
+</resources>
