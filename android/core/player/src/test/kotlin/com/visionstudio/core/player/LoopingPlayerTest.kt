@@ -1,4 +1,4 @@
-package com.visionstudio.feature.video.ui
+package com.visionstudio.core.player
 
 import android.app.Application
 import androidx.media3.common.Player

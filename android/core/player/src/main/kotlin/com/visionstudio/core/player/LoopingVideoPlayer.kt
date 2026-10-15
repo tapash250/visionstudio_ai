@@ -1,4 +1,4 @@
-package com.visionstudio.feature.video.ui
+package com.visionstudio.core.player
 
 import android.content.Context
 import android.graphics.Color as AndroidColor

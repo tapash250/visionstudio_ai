@@ -77,8 +77,8 @@ import com.visionstudio.core.designsystem.theme.StudioShapes
 import com.visionstudio.core.designsystem.theme.StudioTextSecondary
 import com.visionstudio.core.designsystem.theme.StudioViolet
 import com.visionstudio.core.designsystem.theme.VisionStudioTheme
+import com.visionstudio.core.player.LoopingVideoPlayer
 import com.visionstudio.feature.video.ui.JobStage
-import com.visionstudio.feature.video.ui.LoopingVideoPlayer
 import com.visionstudio.feature.video.ui.RendersStrip
 import com.visionstudio.feature.video.ui.VideoDock
 

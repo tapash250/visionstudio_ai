@@ -26,10 +26,8 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
 
-    // Playback
-    implementation(libs.androidx.media3.exoplayer)
-    implementation(libs.androidx.media3.ui)
-    implementation(libs.androidx.media3.common)
+    // Playback lives in the shared player module.
+    implementation(projects.core.player)
 
     // The worker tests drive the real Room DAO; production code only sees :core:data.
     testImplementation(projects.core.database)

@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.visionstudio.core.designsystem.component.PrismSegmentedControl
 import com.visionstudio.core.designsystem.theme.VisionStudioTheme
+import com.visionstudio.feature.gallery.GalleryRoute
 import com.visionstudio.feature.imageedit.EditRoute
 import com.visionstudio.feature.settings.SettingsRoute
 import com.visionstudio.feature.t2i.ImagineRoute
@@ -80,10 +81,11 @@ private enum class Studio(val label: String) {
     Imagine("Imagine"),
     Edit("Edit"),
     Motion("Motion"),
+    Vault("Vault"),
 }
 
 /**
- * Temporary host: Imagine, Edit and Motion switch from a glass bar, and the Engine Room opens over the
+ * Temporary host: Imagine, Edit, Motion and Vault switch from a glass bar, and the Engine Room opens over the
  * top. Ticket 4.3 replaces this with the real bottom-navigation NavHost (Generate, Edit, Video,
  * Vault, Settings).
  */
@@ -124,6 +126,7 @@ private fun InterimShell(openRequest: String?, onOpenRequestHandled: () -> Unit)
                             Studio.Imagine -> ImagineRoute(onOpenSettings = { settingsOpen = true })
                             Studio.Edit -> EditRoute(onOpenSettings = { settingsOpen = true })
                             Studio.Motion -> VideoRoute(onOpenSettings = { settingsOpen = true })
+                            Studio.Vault -> GalleryRoute()
                         }
                     }
                 }
@@ -138,7 +141,7 @@ private fun InterimShell(openRequest: String?, onOpenRequestHandled: () -> Unit)
                         modifier = Modifier
                             .fillMaxWidth()
                             .navigationBarsPadding()
-                            .padding(horizontal = 24.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
             }

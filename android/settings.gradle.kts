@@ -36,12 +36,12 @@ include(":core:mcp")
 include(":core:network")
 include(":core:database")
 include(":core:data")
+include(":core:player")
 
 // Feature layer
 include(":feature:settings")
 include(":feature:t2i")
 include(":feature:imageedit")
 include(":feature:video")
+include(":feature:gallery")
 
-// Upcoming modules are registered here as their tickets land:
-//   :feature:gallery (4.1)
