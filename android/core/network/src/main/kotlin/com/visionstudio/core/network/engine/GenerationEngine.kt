@@ -26,6 +26,14 @@ interface GenerationEngine {
 
     suspend fun poll(job: RemoteJob): JobStatus
 
+    /**
+     * Asks the provider to stop [job]. Only a request: a provider may still finish, and bill, a
+     * render that is already running. Providers without a documented cancel return
+     * [RemoteCancelResult.UNSUPPORTED] without any network call. Failures are thrown as
+     * VisionStudioException.
+     */
+    suspend fun cancel(job: RemoteJob): RemoteCancelResult = RemoteCancelResult.UNSUPPORTED
+
     /** Writes [output] to [target], fetching it with provider credentials if needed. Returns bytes written. */
     suspend fun downloadTo(output: EngineOutput, target: File): Long
 
@@ -77,6 +85,21 @@ data class RemoteJob(
     val resultUrl: String? = null,
     val cancelUrl: String? = null,
 )
+
+/** The provider's answer to [GenerationEngine.cancel]. */
+enum class RemoteCancelResult {
+    /** Accepted. A queued job won't run; a running one may still finish. */
+    REQUESTED,
+
+    /** The job had already finished, so there was nothing to stop. */
+    ALREADY_FINISHED,
+
+    /** The provider doesn't know this job. */
+    NOT_FOUND,
+
+    /** This provider offers no way to cancel. */
+    UNSUPPORTED,
+}
 
 sealed interface JobStatus {
     data class InProgress(

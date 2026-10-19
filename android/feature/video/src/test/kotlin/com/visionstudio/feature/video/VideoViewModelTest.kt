@@ -10,6 +10,7 @@ import com.visionstudio.core.data.generation.GenerationRepository
 import com.visionstudio.core.data.generation.MediaCounts
 import com.visionstudio.core.data.media.MediaInspector
 import com.visionstudio.core.data.media.SourceImageLoader
+import com.visionstudio.core.data.video.CancelledJob
 import com.visionstudio.core.data.video.VideoJob
 import com.visionstudio.core.data.video.VideoJobRepository
 import com.visionstudio.core.data.video.VideoJobStatus
@@ -314,7 +315,7 @@ class VideoViewModelTest {
         override suspend fun create(parameters: GenerationParameters, sourceImage: BinaryPayload?): VideoJob = error("not used")
         override fun observeJobs(limit: Int): Flow<List<VideoJob>> = flow
         override suspend fun get(id: String): VideoJob? = flow.value.firstOrNull { it.id == id }
-        override suspend fun cancel(id: String) = true
+        override suspend fun cancel(id: String): CancelledJob? = null
         override suspend fun retry(id: String) = true
         override suspend fun fail(id: String, message: String) = Unit
         override suspend fun dismiss(id: String) = Unit

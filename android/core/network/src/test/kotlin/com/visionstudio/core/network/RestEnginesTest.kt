@@ -13,6 +13,8 @@ import com.visionstudio.core.network.engine.BinaryPayload
 import com.visionstudio.core.network.engine.EngineOutput
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.JobStatus
+import com.visionstudio.core.network.engine.RemoteCancelResult
+import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
 import com.visionstudio.core.network.engine.authHeaders
 import com.visionstudio.core.network.engine.extractOutputs
@@ -217,6 +219,81 @@ class RestEnginesTest {
         assertEquals(0.55f, (engine.poll(job) as JobStatus.InProgress).progress)
         val done = engine.poll(job) as JobStatus.Completed
         assertEquals("video/mp4", done.outputs.single().mimeType)
+    }
+
+    @Test
+    fun `fal cancel PUTs the cancel url with Key auth and maps the documented answers`() = runBlocking {
+        val engine = FalQueueEngine(config(EngineSlot.VIDEO_STUDIO, RestDialect.FAL_QUEUE, AuthScheme.KEY, "fal-ai/kling"), "fk", http, Dispatchers.IO)
+        val job = RemoteJob("req-1", base("v1/fal-ai/kling/requests/req-1/status"), cancelUrl = base("v1/fal-ai/kling/requests/req-1/cancel"))
+        server.enqueue(body("""{"status":"CANCELLATION_REQUESTED"}""").setResponseCode(202))
+        server.enqueue(body("""{"status":"ALREADY_COMPLETED"}""").setResponseCode(400))
+        server.enqueue(body("""{"status":"NOT_FOUND"}""").setResponseCode(404))
+
+        assertEquals(RemoteCancelResult.REQUESTED, engine.cancel(job))
+        assertEquals(RemoteCancelResult.ALREADY_FINISHED, engine.cancel(job))
+        assertEquals(RemoteCancelResult.NOT_FOUND, engine.cancel(job))
+
+        val first = server.takeRequest()
+        assertEquals("PUT", first.method)
+        assertEquals("/v1/fal-ai/kling/requests/req-1/cancel", first.path)
+        assertEquals("Key fk", first.getHeader("Authorization"))
+    }
+
+    @Test
+    fun `fal cancel never sends the key to a cancel url on another host`() = runBlocking {
+        val engine = FalQueueEngine(config(EngineSlot.VIDEO_STUDIO, RestDialect.FAL_QUEUE, AuthScheme.KEY, "fal-ai/kling"), "fk", http, Dispatchers.IO)
+        server.enqueue(MockResponse().setResponseCode(202))
+        val job = RemoteJob("req-7", base("v1/s"), cancelUrl = "https://attacker.example/steal")
+
+        assertEquals(RemoteCancelResult.REQUESTED, engine.cancel(job))
+
+        assertEquals("rebuilt on the queue's own host", "/v1/fal-ai/kling/requests/req-7/cancel", server.takeRequest().path)
+    }
+
+    @Test
+    fun `fal cancel surfaces auth failures as typed errors`() = runBlocking {
+        val engine = FalQueueEngine(config(EngineSlot.VIDEO_STUDIO, RestDialect.FAL_QUEUE, AuthScheme.KEY, "fal-ai/kling"), "bad", http, Dispatchers.IO)
+        server.enqueue(body("""{"detail":"invalid key"}""").setResponseCode(401))
+
+        val failure = runCatching { engine.cancel(RemoteJob("r", base("v1/s"))) }.exceptionOrNull()
+
+        assertTrue("got $failure", failure is VisionStudioException.AuthenticationException)
+    }
+
+    @Test
+    fun `custom engine cancels only through a cancel_url its envelope announced`() = runBlocking {
+        val engine = CustomRestEngine(config(EngineSlot.VIDEO_STUDIO, RestDialect.CUSTOM), "ck", http, Dispatchers.IO)
+        server.enqueue(body("""{"job_id":"j-1","status_url":"${base("v1/jobs/j-1")}","cancel_url":"${base("v1/jobs/j-1/cancel")}"}"""))
+        val queued = engine.submit(EngineRequest(EngineSlot.VIDEO_STUDIO, params)) as Submission.Queued
+        server.takeRequest()
+        assertEquals(base("v1/jobs/j-1/cancel"), queued.job.cancelUrl)
+
+        server.enqueue(MockResponse().setResponseCode(200))
+        assertEquals(RemoteCancelResult.REQUESTED, engine.cancel(queued.job))
+        val sent = server.takeRequest()
+        assertEquals("POST", sent.method)
+        assertEquals("/v1/jobs/j-1/cancel", sent.path)
+        assertEquals("Bearer ck", sent.getHeader("Authorization"))
+
+        server.enqueue(MockResponse().setResponseCode(409))
+        assertEquals(RemoteCancelResult.ALREADY_FINISHED, engine.cancel(queued.job))
+    }
+
+    @Test
+    fun `custom engine without a cancel_url, or with a foreign one, sends nothing`() = runBlocking {
+        val engine = CustomRestEngine(config(EngineSlot.VIDEO_STUDIO, RestDialect.CUSTOM), "ck", http, Dispatchers.IO)
+
+        assertEquals(RemoteCancelResult.UNSUPPORTED, engine.cancel(RemoteJob("j", base("v1/jobs/j"))))
+        assertEquals(RemoteCancelResult.UNSUPPORTED, engine.cancel(RemoteJob("j", base("v1/jobs/j"), cancelUrl = "https://elsewhere.example/c")))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun `openai has no documented cancel, so nothing is sent`() = runBlocking {
+        val engine = OpenAiCompatibleEngine(config(EngineSlot.VIDEO_STUDIO, RestDialect.OPENAI_COMPATIBLE), "sk", http, Dispatchers.IO)
+
+        assertEquals(RemoteCancelResult.UNSUPPORTED, engine.cancel(RemoteJob("video_1", base("v1/videos/video_1"))))
+        assertEquals(0, server.requestCount)
     }
 
     @Test

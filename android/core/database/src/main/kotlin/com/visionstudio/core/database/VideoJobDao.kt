@@ -2,6 +2,7 @@ package com.visionstudio.core.database
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -63,6 +64,17 @@ interface VideoJobDao {
             "WHERE id = :id AND status NOT IN ('COMPLETED', 'FAILED', 'CANCELLED')",
     )
     suspend fun markCancelled(id: String, now: Long): Int
+
+    /**
+     * Cancels a live job and returns the row as it was at that moment, provider handle included,
+     * so the caller can ask the provider to stop it. Null if it had already finished or doesn't
+     * exist. Atomic, so a retry can't clear the handle between reading it and cancelling.
+     */
+    @Transaction
+    suspend fun cancelLive(id: String, now: Long): VideoJobEntity? {
+        val row = get(id) ?: return null
+        return if (markCancelled(id, now) > 0) row else null
+    }
 
     @Query("UPDATE video_jobs SET attempts = attempts + 1, updated_at = :now WHERE id = :id")
     suspend fun incrementAttempts(id: String, now: Long): Int

@@ -7,6 +7,7 @@ import com.visionstudio.core.network.engine.ConnectionProbe
 import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.JobStatus
+import com.visionstudio.core.network.engine.RemoteCancelResult
 import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
 import com.visionstudio.core.network.engine.extractOutputs
@@ -14,9 +15,11 @@ import com.visionstudio.core.network.engine.joinUrl
 import com.visionstudio.core.network.engine.outputDimensions
 import com.visionstudio.core.network.engine.promptWithDirectives
 import com.visionstudio.core.network.engine.requireSourceImage
+import com.visionstudio.core.network.engine.sameHost
 import com.visionstudio.core.network.engine.timed
 import com.visionstudio.core.network.engine.toFailedProbe
 import com.visionstudio.core.network.http.RestHttpClient
+import com.visionstudio.core.network.http.throwIfError
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -26,11 +29,13 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Fal.ai queue dialect. Submissions go to `POST {base}/{modelId}`, which returns `request_id`,
  * `status_url` and `response_url`. Polling `status_url` reports `IN_QUEUE` → `IN_PROGRESS` →
- * `COMPLETED`, and `response_url` then returns the model output.
+ * `COMPLETED`, and `response_url` then returns the model output. `PUT cancel_url` asks Fal to stop
+ * a request: a queued one is dropped, a running one is signalled and may still complete.
  * [EngineConfig.endpointUrl] defaults to `https://queue.fal.run`.
  */
 class FalQueueEngine(
@@ -131,6 +136,25 @@ class FalQueueEngine(
         }
     }
 
+    /**
+     * `PUT {cancel_url}`: 202 accepted, 400 already completed, 404 unknown. The stored URL is used
+     * only if it is on the queue's own host, since it carries the API key; otherwise the
+     * documented path is rebuilt from the request id.
+     */
+    override suspend fun cancel(job: RemoteJob): RemoteCancelResult {
+        val url = job.cancelUrl?.takeIf { sameHost(it, base) } ?: joinUrl(base, "$modelPath/requests/${job.id}/cancel")
+        val result = http.execute(authorized(url).put(ByteArray(0).toRequestBody()).build())
+        return when {
+            result.isSuccessful -> RemoteCancelResult.REQUESTED
+            result.code == HTTP_BAD_REQUEST -> RemoteCancelResult.ALREADY_FINISHED
+            result.code == HTTP_NOT_FOUND -> RemoteCancelResult.NOT_FOUND
+            else -> {
+                result.throwIfError(config.slot)
+                RemoteCancelResult.REQUESTED // not reached: throwIfError throws for every non-2xx
+            }
+        }
+    }
+
     private suspend fun fetchResult(job: RemoteJob): JobStatus {
         val resultUrl = job.resultUrl ?: joinUrl(base, "$modelPath/requests/${job.id}")
         return try {
@@ -151,6 +175,8 @@ class FalQueueEngine(
         const val NIL_UUID = "00000000-0000-0000-0000-000000000000"
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403
+        const val HTTP_BAD_REQUEST = 400
+        const val HTTP_NOT_FOUND = 404
         val HTTP_SERVER_ERRORS = 500..599
     }
 }

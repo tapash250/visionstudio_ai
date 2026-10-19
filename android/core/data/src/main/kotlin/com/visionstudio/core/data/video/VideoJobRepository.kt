@@ -8,6 +8,7 @@ import com.visionstudio.core.database.VideoJobDao
 import com.visionstudio.core.database.VideoJobEntity
 import com.visionstudio.core.model.GenerationParameters
 import com.visionstudio.core.network.engine.BinaryPayload
+import com.visionstudio.core.network.engine.RemoteJob
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
@@ -29,8 +30,11 @@ interface VideoJobRepository {
 
     suspend fun get(id: String): VideoJob?
 
-    /** Marks a live job cancelled (it stays retryable). Returns false if it had already finished. */
-    suspend fun cancel(id: String): Boolean
+    /**
+     * Marks a live job cancelled (it stays retryable) and returns what it held, so the provider can
+     * be asked to stop it as well. Null if it had already finished.
+     */
+    suspend fun cancel(id: String): CancelledJob?
 
     /** Re-queues a failed or cancelled job from scratch. Returns false if it isn't retryable. */
     suspend fun retry(id: String): Boolean
@@ -109,9 +113,16 @@ internal class DefaultVideoJobRepository @Inject constructor(
 
     override suspend fun get(id: String): VideoJob? = dao.get(id)?.toJob()
 
-    override suspend fun cancel(id: String): Boolean {
+    override suspend fun cancel(id: String): CancelledJob? {
         // The staged source image is kept so a cancelled job can be retried without re-picking.
-        return dao.markCancelled(id, clock.now()) > 0
+        val row = dao.cancelLive(id, clock.now()) ?: return null
+        return CancelledJob(
+            id = row.id,
+            remote = row.remoteJobJson?.let { json ->
+                runCatching { JobJson.decodeFromString(RemoteJob.serializer(), json) }.getOrNull()
+            },
+            engineFingerprint = row.engineFingerprint,
+        )
     }
 
     override suspend fun retry(id: String): Boolean {

@@ -3,6 +3,7 @@ package com.visionstudio.feature.video.work
 import android.content.Context
 import androidx.core.app.NotificationCompat
 import androidx.work.ForegroundInfo
+import com.visionstudio.core.data.video.CancelledJob
 import com.visionstudio.core.data.video.VideoJob
 import com.visionstudio.core.data.video.VideoJobRepository
 import com.visionstudio.core.data.video.VideoJobStatus
@@ -17,6 +18,7 @@ import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.GenerationEngine
 import com.visionstudio.core.network.engine.JobStatus
+import com.visionstudio.core.network.engine.RemoteCancelResult
 import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
 import com.visionstudio.feature.video.R
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.Collections
 
 internal val TestJson = Json { encodeDefaults = true; ignoreUnknownKeys = true }
 
@@ -48,7 +51,9 @@ internal class DaoJobs(private val dao: VideoJobDao, private val now: () -> Long
 
     override fun observeJobs(limit: Int): Flow<List<VideoJob>> = dao.observeRecent(limit).map { rows -> rows.map { it.toJob() } }
     override suspend fun get(id: String): VideoJob? = dao.get(id)?.toJob()
-    override suspend fun cancel(id: String) = dao.markCancelled(id, now()) > 0
+    override suspend fun cancel(id: String): CancelledJob? = dao.cancelLive(id, now())?.let { row ->
+        CancelledJob(row.id, row.remoteJobJson?.let { TestJson.decodeFromString(RemoteJob.serializer(), it) }, row.engineFingerprint)
+    }
     override suspend fun retry(id: String) = dao.resetForRetry(id, now()) > 0
     override suspend fun fail(id: String, message: String) { dao.markFailed(id, message, now()) }
     override suspend fun dismiss(id: String) { dao.delete(id) }
@@ -90,6 +95,16 @@ internal class StubEngine(override val config: EngineConfig) : GenerationEngine 
     }
 
     override suspend fun poll(job: RemoteJob): JobStatus = (pollScript.removeFirstOrNull() ?: { JobStatus.InProgress(0.1f) }).invoke()
+
+    /** Handles the provider was asked to cancel, in order. */
+    val cancelled: MutableList<RemoteJob> = Collections.synchronizedList(mutableListOf())
+    var cancelResult: suspend () -> RemoteCancelResult = { RemoteCancelResult.REQUESTED }
+
+    override suspend fun cancel(job: RemoteJob): RemoteCancelResult {
+        cancelled += job
+        return cancelResult()
+    }
+
     override suspend fun downloadTo(output: EngineOutput, target: File): Long = 0L
     override suspend fun close() = Unit
 }

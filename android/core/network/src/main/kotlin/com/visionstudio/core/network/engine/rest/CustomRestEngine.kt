@@ -7,10 +7,12 @@ import com.visionstudio.core.network.engine.ConnectionProbe
 import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.JobStatus
+import com.visionstudio.core.network.engine.RemoteCancelResult
 import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
 import com.visionstudio.core.network.engine.decodePreviewPayload
 import com.visionstudio.core.network.engine.extractOutputs
+import com.visionstudio.core.network.engine.isSameHost
 import com.visionstudio.core.network.engine.previewString
 import com.visionstudio.core.network.engine.streamFraction
 import com.visionstudio.core.network.engine.stringField
@@ -21,6 +23,7 @@ import com.visionstudio.core.network.engine.promptWithDirectives
 import com.visionstudio.core.network.engine.timed
 import com.visionstudio.core.network.engine.toFailedProbe
 import com.visionstudio.core.network.http.RestHttpClient
+import com.visionstudio.core.network.http.throwIfError
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -34,6 +37,10 @@ import kotlinx.serialization.json.put
  * Generic JSON dialect for self-hosted backends. Sends one flat payload and accepts either an
  * immediate media response or a job envelope (`id`/`job_id`/`request_id` plus an optional
  * `status_url`), which is then polled.
+ *
+ * Cancellation is opt-in: if the envelope also carries `cancel_url` on the endpoint's own host,
+ * cancelling sends `POST {cancel_url}` with an empty JSON object. Any 2xx means accepted, 404
+ * means unknown and 409 or 410 mean it had already finished. Without one there is nothing to call.
  */
 class CustomRestEngine(
     config: EngineConfig,
@@ -112,6 +119,7 @@ class CustomRestEngine(
                 id = jobId,
                 statusUrl = envelope.string("status_url") ?: joinUrl(config.endpointUrl, jobId),
                 resultUrl = envelope.string("result_url") ?: envelope.string("response_url"),
+                cancelUrl = envelope.string("cancel_url"),
             ),
         )
     }
@@ -173,6 +181,21 @@ class CustomRestEngine(
         }
     }
 
+    override suspend fun cancel(job: RemoteJob): RemoteCancelResult {
+        // The request carries the API key, so it only ever goes to the configured endpoint's host.
+        val url = job.cancelUrl?.takeIf { config.isSameHost(it) } ?: return RemoteCancelResult.UNSUPPORTED
+        val result = http.execute(authorized(url).post(http.jsonBody(JsonObject(emptyMap()))).build())
+        return when {
+            result.isSuccessful -> RemoteCancelResult.REQUESTED
+            result.code == HTTP_NOT_FOUND -> RemoteCancelResult.NOT_FOUND
+            result.code == HTTP_CONFLICT || result.code == HTTP_GONE -> RemoteCancelResult.ALREADY_FINISHED
+            else -> {
+                result.throwIfError(config.slot)
+                RemoteCancelResult.REQUESTED // not reached: throwIfError throws for every non-2xx
+            }
+        }
+    }
+
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
     private companion object {
@@ -181,6 +204,9 @@ class CustomRestEngine(
         val FAILED_STATES = setOf("failed", "error", "cancelled", "canceled")
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403
+        const val HTTP_NOT_FOUND = 404
+        const val HTTP_CONFLICT = 409
+        const val HTTP_GONE = 410
         val HTTP_SERVER_ERRORS = 500..599
         const val PERCENT = 100.0
     }

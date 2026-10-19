@@ -36,6 +36,12 @@ internal fun Request.Builder.headers(values: Map<String, String>): Request.Build
 internal fun joinUrl(base: String, path: String): String =
     base.trimEnd('/') + "/" + path.trimStart('/')
 
+/** True when [a] and [b] are URLs on the same host. */
+internal fun sameHost(a: String, b: String): Boolean {
+    val host = a.toHttpUrlOrNull()?.host ?: return false
+    return b.toHttpUrlOrNull()?.host.equals(host, ignoreCase = true)
+}
+
 /** True when [url] points at the same host as the configured endpoint (credentials may be sent). */
 internal fun EngineConfig.isSameHost(url: String): Boolean {
     val endpointHost = endpointUrl.toHttpUrlOrNull()?.host ?: return false

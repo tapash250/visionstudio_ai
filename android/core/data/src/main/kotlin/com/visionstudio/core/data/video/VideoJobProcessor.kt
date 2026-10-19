@@ -65,7 +65,9 @@ sealed interface VideoJobOutcome {
  *   Only failures that provably happen before the request is accepted (no route, DNS) retry.
  * - **Polls every 5 s, easing up to 10 s**, until the provider reports done, failed, or the
  *   [MAX_JOB_MILLIS] budget (measured from when the job was created) is spent.
- * - **Honours cancellation** between polls by re-reading the job's status.
+ * - **Honours cancellation** between polls by re-reading the job's status. The provider is told
+ *   by [RemoteJobCanceller] when the user cancels; this run tells it only when the job was
+ *   accepted after the cancel, since then only this run knows the handle.
  * - **Refuses to poll a stranger's handle**: if the configured engine changed since submission,
  *   the job fails cleanly instead of asking a different provider about an unknown id.
  * - Separates **transient** problems (returned as [VideoJobOutcome.Retry]) from **permanent**
@@ -156,9 +158,13 @@ class VideoJobProcessor @Inject constructor(
                 is Submission.Queued -> {
                     remote = submission.job
                     // From this point the job survives any restart: the handle is durable. A zero result
-                    // means the job was cancelled while the provider was accepting it.
+                    // means the user cancelled while the provider was accepting it. Only this run has the
+                    // new handle, so it is the one that has to ask the provider to drop the job.
                     val saved = dao.setRemoteJob(jobId, JobJson.encodeToString(RemoteJob.serializer(), submission.job), fingerprint, clock.now())
-                    if (saved == 0) return VideoJobOutcome.Cancelled
+                    if (saved == 0) {
+                        requestRemoteCancel(engine, submission.job)
+                        return VideoJobOutcome.Cancelled
+                    }
                 }
             }
         }
@@ -320,9 +326,6 @@ class VideoJobProcessor @Inject constructor(
 
     private fun decodeRemote(json: String): RemoteJob? =
         runCatching { JobJson.decodeFromString(RemoteJob.serializer(), json) }.getOrNull()
-
-    private fun EngineConfig.fingerprint(): String =
-        "$protocol|$restDialect|${endpointUrl.trimEnd('/')}|$modelId|${mcpToolName.orEmpty()}"
 
     companion object {
         const val POLL_START_MILLIS: Long = 5_000

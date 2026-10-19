@@ -22,6 +22,7 @@ import com.visionstudio.core.network.engine.EngineProgress
 import com.visionstudio.core.network.engine.EngineRequest
 import com.visionstudio.core.network.engine.GenerationEngine
 import com.visionstudio.core.network.engine.JobStatus
+import com.visionstudio.core.network.engine.RemoteCancelResult
 import com.visionstudio.core.network.engine.RemoteJob
 import com.visionstudio.core.network.engine.Submission
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -108,6 +109,12 @@ class VideoJobProcessorTest {
         override suspend fun poll(job: RemoteJob): JobStatus {
             pollTimes += now()
             return (pollScript.removeFirstOrNull() ?: pollFallback).invoke()
+        }
+
+        val cancelled = mutableListOf<RemoteJob>()
+        override suspend fun cancel(job: RemoteJob): RemoteCancelResult {
+            cancelled += job
+            return RemoteCancelResult.REQUESTED
         }
 
         override suspend fun downloadTo(output: EngineOutput, target: File): Long = 0L
@@ -372,6 +379,7 @@ class VideoJobProcessorTest {
         assertEquals(VideoJobOutcome.Cancelled, outcome)
         assertEquals(1, rig.engine.pollTimes.size)
         assertEquals("CANCELLED", dao.statusOf(id))
+        assertTrue("a stored handle is cancelled by the user's cancel path, not here", rig.engine.cancelled.isEmpty())
     }
 
     @Test
@@ -468,6 +476,7 @@ class VideoJobProcessorTest {
         assertEquals("not failed, not cancelled", "POLLING", row.status)
         assertNotNull(row.remoteJobJson)
         assertEquals("the engine is still closed on the way out", 1, rig.engine.closed)
+        assertTrue("a system stop must never cancel the render at the provider", rig.engine.cancelled.isEmpty())
     }
 
     @Test
@@ -521,6 +530,7 @@ class VideoJobProcessorTest {
         assertEquals(VideoJobOutcome.Cancelled, outcome)
         assertEquals("never polled a job the user cancelled", 0, rig.engine.pollTimes.size)
         assertEquals("CANCELLED", dao.statusOf(id))
+        assertEquals("only this run knows the new handle, so it tells the provider", listOf("remote-1"), rig.engine.cancelled.map { it.id })
     }
 
     @Test
