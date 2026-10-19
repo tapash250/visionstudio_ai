@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.visionstudio.android.application)
     alias(libs.plugins.visionstudio.android.application.compose)
     alias(libs.plugins.visionstudio.android.hilt)
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -49,7 +50,16 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
     ksp(libs.androidx.hilt.compiler)
+
+    baselineProfile(projects.baselineprofile)
+}
+
+dependencies {
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }
