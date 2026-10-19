@@ -44,4 +44,12 @@
     <string name="field_source">Started from</string>
     <string name="field_source_photo">A photo</string>
     <string name="field_copy_value">Copy %1$s</string>
+
+    <string name="sheet_save">Save to gallery</string>
+    <string name="sheet_saving">Saving…</string>
+    <string name="sheet_saved">Saved to %1$s</string>
+    <string name="sheet_saved_with_settings">Saved to %1$s with its settings embedded</string>
+    <string name="sheet_share">Share</string>
+    <string name="sheet_share_title">Share your creation</string>
+    <string name="sheet_share_unavailable">No app can handle sharing here</string>
 </resources>

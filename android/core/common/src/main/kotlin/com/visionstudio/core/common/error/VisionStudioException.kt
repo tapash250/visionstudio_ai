@@ -73,6 +73,15 @@ sealed class VisionStudioException(
         cause: Throwable? = null,
     ) : VisionStudioException(message, cause)
 
+    /**
+     * The OS permission named by [permission] must be granted before this can succeed. Not a
+     * failure: the UI is expected to ask the user and then repeat the operation.
+     */
+    class PermissionRequiredException(
+        val permission: String,
+        message: String = "Permission required: $permission",
+    ) : VisionStudioException(message)
+
     /** Local file, MediaStore, or bitmap pipeline failure. */
     class StorageException(
         message: String,

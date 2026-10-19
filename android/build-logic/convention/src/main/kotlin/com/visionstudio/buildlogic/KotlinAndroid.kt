@@ -32,6 +32,9 @@ internal fun Project.configureKotlinAndroid(commonExtension: CommonExtension<*, 
         testOptions {
             unitTests.isReturnDefaultValues = true
             unitTests.isIncludeAndroidResources = true
+            // Robolectric's ParcelFileDescriptor shadow closes descriptors by reflecting into
+            // java.io.FileDescriptor, which JDK 17 seals. Open it for the unit-test JVM only.
+            unitTests.all { test -> test.jvmArgs("--add-opens=java.base/java.io=ALL-UNNAMED") }
         }
 
         packaging {

@@ -1,5 +1,9 @@
 package com.visionstudio.feature.gallery
 
+import android.content.ActivityNotFoundException
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +62,28 @@ fun GalleryRoute(
     viewModel: GalleryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val unavailable = stringResource(R.string.sheet_share_unavailable)
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is GalleryEvent.Share -> try {
+                    context.startActivity(event.chooser)
+                } catch (none: ActivityNotFoundException) {
+                    Toast.makeText(context, unavailable, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // Android 8-9 only: saving to the shared folders needs a runtime permission. Newer versions never get here.
+    val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.onIntent(GalleryIntent.StoragePermissionResult(granted))
+    }
+    val needed = (state.export as? ExportState.NeedsPermission)?.permission
+    LaunchedEffect(needed) { if (needed != null) storagePermission.launch(needed) }
+
     GalleryScreen(state = state, onIntent = viewModel::onIntent, modifier = modifier)
 }
 
@@ -66,6 +93,7 @@ fun GalleryScreen(
     onIntent: (GalleryIntent) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shareTitle = stringResource(R.string.sheet_share_title)
     val gridState = rememberLazyStaggeredGridState()
     // A new filter is a different list; start at its top rather than at a meaningless offset.
     LaunchedEffect(state.filter) { gridState.scrollToItem(0) }
@@ -113,6 +141,9 @@ fun GalleryScreen(
     state.selected?.let { item ->
         InspectorSheet(
             item = item,
+            export = state.export,
+            onSave = { onIntent(GalleryIntent.SaveToGallery) },
+            onShare = { onIntent(GalleryIntent.Share(shareTitle)) },
             onDismiss = { onIntent(GalleryIntent.Close) },
             onDelete = { onIntent(GalleryIntent.Delete(item.id)) },
         )

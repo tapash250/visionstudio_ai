@@ -16,6 +16,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -42,6 +44,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.visionstudio.core.designsystem.component.BlurHashImage
+import com.visionstudio.core.designsystem.component.GhostButton
+import com.visionstudio.core.designsystem.component.PrismButton
 import com.visionstudio.core.designsystem.component.SectionHeader
 import com.visionstudio.core.designsystem.haptics.HapticPattern
 import com.visionstudio.core.designsystem.haptics.rememberStudioHaptics
@@ -58,6 +62,7 @@ import com.visionstudio.core.designsystem.theme.VisionStudioTheme
 import com.visionstudio.core.model.MediaItem
 import com.visionstudio.core.model.MediaType
 import com.visionstudio.core.player.LoopingVideoPlayer
+import com.visionstudio.feature.gallery.ExportState
 import com.visionstudio.feature.gallery.R
 import com.visionstudio.feature.gallery.model.InspectorField
 import com.visionstudio.feature.gallery.model.InspectorRow
@@ -73,6 +78,9 @@ import java.time.ZoneId
 @Composable
 internal fun InspectorSheet(
     item: MediaItem,
+    export: ExportState,
+    onSave: () -> Unit,
+    onShare: () -> Unit,
     onDismiss: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -138,6 +146,8 @@ internal fun InspectorSheet(
                     DetailRow(row = row, copied = copiedField == row.field.name, onCopy = { text -> copy(row.field.name, text) })
                 }
             }
+
+            ExportActions(export = export, onSave = onSave, onShare = onShare)
 
             DeleteButton(armed = armedDelete, onClick = { if (armedDelete) onDelete() else armedDelete = true })
         }
@@ -216,6 +226,44 @@ private fun CopyChip(label: String, done: Boolean, onClick: () -> Unit) {
             style = MaterialTheme.typography.labelSmall,
             color = if (done) StudioCyan else StudioTextSecondary,
         )
+    }
+}
+
+@Composable
+private fun ExportActions(export: ExportState, onSave: () -> Unit, onShare: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            PrismButton(
+                text = stringResource(R.string.sheet_save),
+                onClick = onSave,
+                enabled = export !is ExportState.Saved,
+                loading = export is ExportState.Saving,
+                loadingText = stringResource(R.string.sheet_saving),
+                icon = Icons.Rounded.SaveAlt,
+                modifier = Modifier.weight(0.62f),
+            )
+            GhostButton(
+                text = stringResource(R.string.sheet_share),
+                onClick = onShare,
+                icon = Icons.Rounded.IosShare,
+                modifier = Modifier.weight(0.38f),
+            )
+        }
+        val message = when (export) {
+            is ExportState.Saved -> stringResource(
+                if (export.metadataEmbedded) R.string.sheet_saved_with_settings else R.string.sheet_saved,
+                export.folder,
+            )
+            is ExportState.Failed -> export.message
+            else -> null
+        }
+        if (message != null) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (export is ExportState.Failed) StudioError else StudioCyan,
+            )
+        }
     }
 }
 

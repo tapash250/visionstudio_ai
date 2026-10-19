@@ -15,6 +15,7 @@ dependencies {
     implementation(projects.core.data)
     implementation(projects.core.player)
 
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.navigation.compose)
@@ -23,4 +24,8 @@ dependencies {
     // Coil 3: hardware-bitmap image loading, plus video poster frames.
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
+}
+
+dependencies {
+    testImplementation(libs.robolectric)
 }

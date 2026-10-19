@@ -1,5 +1,11 @@
 package com.visionstudio.feature.gallery
 
+import android.content.Intent
+import android.net.Uri
+import com.visionstudio.core.common.error.VisionStudioException
+import com.visionstudio.core.common.export.ExportedMedia
+import com.visionstudio.core.common.export.MediaExporter
+import com.visionstudio.core.common.result.Result
 import com.visionstudio.core.data.generation.GenerationEvent
 import com.visionstudio.core.data.generation.GenerationRepository
 import com.visionstudio.core.data.video.Clock
@@ -27,8 +33,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class GalleryViewModelTest {
 
     private val library = MutableStateFlow<List<MediaItem>>(emptyList())
@@ -48,7 +59,9 @@ class GalleryViewModelTest {
     @Before fun setUp() = Dispatchers.setMain(UnconfinedTestDispatcher())
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel() = GalleryViewModel(repository, Clock { now }, UnconfinedTestDispatcher())
+    private val exporter = FakeExporter()
+
+    private fun viewModel() = GalleryViewModel(repository, exporter, Clock { now }, UnconfinedTestDispatcher())
 
     private fun item(id: String, type: MediaType = MediaType.IMAGE, ageMillis: Long = 0) = MediaItem(
         id = id, taskId = "t", type = type, localUri = "file:///$id", width = 100, height = 100,
@@ -191,6 +204,155 @@ class GalleryViewModelTest {
             vm.onIntent(GalleryIntent.Close)
             vm.onIntent(GalleryIntent.Delete("a")) // nothing open at all
             assertTrue(deleted.isEmpty())
+        }
+    }
+
+    // region export and share
+
+    @Test
+    fun `saving reports where the file went and whether settings were embedded`() {
+        library.value = listOf(item("a"))
+        exporter.saveResults += Result.Success(ExportedMedia(Uri.parse("content://media/1"), "a.png", "image/png", "Pictures/VisionStudio", metadataEmbedded = true))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.Open("a"))
+            vm.onIntent(GalleryIntent.SaveToGallery)
+
+            assertEquals(ExportState.Saved("Pictures/VisionStudio", metadataEmbedded = true), state().export)
+            assertEquals(listOf("a"), exporter.saved)
+        }
+    }
+
+    @Test
+    fun `saving does nothing when no item is open`() {
+        library.value = listOf(item("a"))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.SaveToGallery)
+
+            assertEquals(ExportState.Idle, state().export)
+            assertTrue(exporter.saved.isEmpty())
+        }
+    }
+
+    @Test
+    fun `a failed save shows the reason and can be tried again`() {
+        library.value = listOf(item("a"))
+        exporter.saveResults += Result.Error(VisionStudioException.StorageException("Disk full"))
+        exporter.saveResults += Result.Success(ExportedMedia(Uri.parse("content://media/2"), "a.png", "image/png", "Pictures/VisionStudio", false))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.Open("a"))
+            vm.onIntent(GalleryIntent.SaveToGallery)
+            assertEquals(ExportState.Failed("Disk full"), state().export)
+
+            vm.onIntent(GalleryIntent.SaveToGallery)
+            assertEquals(ExportState.Saved("Pictures/VisionStudio", false), state().export)
+        }
+    }
+
+    @Test
+    fun `on old Android a missing permission asks for it, and granting repeats the save`() {
+        library.value = listOf(item("a"))
+        exporter.saveResults += Result.Error(VisionStudioException.PermissionRequiredException("android.permission.WRITE_EXTERNAL_STORAGE"))
+        exporter.saveResults += Result.Success(ExportedMedia(Uri.parse("content://media/3"), "a.png", "image/png", "Pictures/VisionStudio", true))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.Open("a"))
+            vm.onIntent(GalleryIntent.SaveToGallery)
+            assertEquals(ExportState.NeedsPermission("android.permission.WRITE_EXTERNAL_STORAGE"), state().export)
+
+            vm.onIntent(GalleryIntent.StoragePermissionResult(granted = true))
+
+            assertEquals(ExportState.Saved("Pictures/VisionStudio", true), state().export)
+            assertEquals("the same item is saved after the grant", listOf("a", "a"), exporter.saved)
+        }
+    }
+
+    @Test
+    fun `refusing the permission explains why nothing was saved and does not retry`() {
+        library.value = listOf(item("a"))
+        exporter.saveResults += Result.Error(VisionStudioException.PermissionRequiredException("android.permission.WRITE_EXTERNAL_STORAGE"))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.Open("a"))
+            vm.onIntent(GalleryIntent.SaveToGallery)
+
+            vm.onIntent(GalleryIntent.StoragePermissionResult(granted = false))
+
+            assertTrue(state().export is ExportState.Failed)
+            assertEquals("no second attempt after a refusal", 1, exporter.saved.size)
+        }
+    }
+
+    @Test
+    fun `sharing delivers the chooser to the screen exactly once`() = runTest(UnconfinedTestDispatcher()) {
+        library.value = listOf(item("a"))
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect { } }
+        val received = mutableListOf<GalleryEvent>()
+        backgroundScope.launch { vm.events.collect { received += it } }
+        vm.onIntent(GalleryIntent.Open("a"))
+
+        vm.onIntent(GalleryIntent.Share("Share it"))
+
+        assertEquals(1, received.size)
+        assertEquals("Share it", exporter.shareTitles.single())
+        assertEquals(listOf("a"), exporter.shared)
+    }
+
+    @Test
+    fun `a share that cannot be built shows an error instead of an event`() = runTest(UnconfinedTestDispatcher()) {
+        library.value = listOf(item("a"))
+        exporter.shareFailure = VisionStudioException.StorageException("The original file is gone")
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect { } }
+        val received = mutableListOf<GalleryEvent>()
+        backgroundScope.launch { vm.events.collect { received += it } }
+        vm.onIntent(GalleryIntent.Open("a"))
+
+        vm.onIntent(GalleryIntent.Share(null))
+
+        assertTrue(received.isEmpty())
+        assertEquals(ExportState.Failed("The original file is gone"), vm.uiState.value.export)
+    }
+
+    @Test
+    fun `opening another item or closing clears the previous export message`() {
+        library.value = listOf(item("a"), item("b"))
+        exporter.saveResults += Result.Success(ExportedMedia(Uri.parse("content://media/4"), "a.png", "image/png", "Pictures/VisionStudio", true))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.Open("a"))
+            vm.onIntent(GalleryIntent.SaveToGallery)
+            assertTrue(state().export is ExportState.Saved)
+
+            vm.onIntent(GalleryIntent.Open("b"))
+            assertEquals("b's sheet must not claim it was saved", ExportState.Idle, state().export)
+
+            vm.onIntent(GalleryIntent.Close)
+            assertEquals(ExportState.Idle, state().export)
+        }
+    }
+
+    // endregion
+
+    private class FakeExporter : MediaExporter {
+        val saveResults = ArrayDeque<Result<ExportedMedia>>()
+        val saved = mutableListOf<String>()
+        val shared = mutableListOf<String>()
+        val shareTitles = mutableListOf<CharSequence?>()
+        var shareFailure: VisionStudioException? = null
+
+        override suspend fun exportToGallery(item: MediaItem, embedMetadata: Boolean): Result<ExportedMedia> {
+            saved += item.id
+            return saveResults.removeFirstOrNull() ?: Result.Error(VisionStudioException.UnknownException("unscripted"))
+        }
+
+        override suspend fun createShareIntent(item: MediaItem, chooserTitle: CharSequence?, includePrompt: Boolean): Result<Intent> {
+            shared += item.id
+            shareTitles += chooserTitle
+            return shareFailure?.let { Result.Error(it) } ?: Result.Success(Intent(Intent.ACTION_CHOOSER))
         }
     }
 }
