@@ -11,16 +11,14 @@ import java.time.ZoneId
  * Writes an image's generation parameters into its own EXIF block, so the settings travel with
  * the file wherever it is copied.
  *
- * - `UserComment`: the JSON from [generationComment].
+ * - `UserComment`: the JSON from [generationComment], stored as the EXIF specification defines it
+ *   (type UNDEFINED, prefixed with the 8-byte `ASCII\0\0\0` character code; see [ExifUserComment]).
  * - `Software`: [EXPORT_APP_NAME], so tools can tell where the file came from.
  * - `DateTimeOriginal` / `DateTime`: the creation time, so galleries sort it correctly.
  *
  * PNG, JPEG and WebP are all supported by the AndroidX writer. Any other format is left as it is.
- *
- * Known deviation, verified against two independent readers (Pillow and piexif): the AndroidX
- * writer stores `UserComment` as a plain ASCII field and does not add the 8-byte `ASCII\0\0\0`
- * character-set marker the EXIF specification describes. Both readers recover the JSON exactly;
- * a reader that insists on the marker may show the field unparsed.
+ * If the comment can't be retyped (an unexpected file layout), it is written the way the AndroidX
+ * writer does by itself, as a plain ASCII field, which every reader tested still understands.
  */
 internal object ExifEmbedder {
 
@@ -37,24 +35,36 @@ internal object ExifEmbedder {
         } catch (unreadable: IOException) {
             return false
         }
-        val written = try {
-            ExifInterface(file.path).apply {
-                setAttribute(ExifInterface.TAG_USER_COMMENT, comment)
-                setAttribute(ExifInterface.TAG_SOFTWARE, EXPORT_APP_NAME)
-                val taken = exifDateTime(item.createdAtEpochMillis, zone)
-                setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, taken)
-                setAttribute(ExifInterface.TAG_DATETIME, taken)
-                saveAttributes()
-            }
-            // Never hand back a file we can't read back.
-            ExifInterface(file.path).getAttribute(ExifInterface.TAG_USER_COMMENT) == comment
-        } catch (unsupported: IOException) {
-            false
-        } catch (malformed: RuntimeException) {
-            false
-        }
+        val written = write(file, item, zone, comment, specCompliant = true) ||
+            restore(file, before).let { write(file, item, zone, comment, specCompliant = false) }
         if (!written) restore(file, before)
         return written
+    }
+
+    /**
+     * Writes the tags and verifies they read back. With [specCompliant], `UserComment` carries the
+     * ASCII character code and is retyped to UNDEFINED; otherwise it is the AndroidX default.
+     */
+    private fun write(file: File, item: MediaItem, zone: ZoneId, comment: String, specCompliant: Boolean): Boolean = try {
+        ExifInterface(file.path).apply {
+            setAttribute(ExifInterface.TAG_USER_COMMENT, if (specCompliant) ExifUserComment.withAsciiCode(comment) else comment)
+            setAttribute(ExifInterface.TAG_SOFTWARE, EXPORT_APP_NAME)
+            val taken = exifDateTime(item.createdAtEpochMillis, zone)
+            setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, taken)
+            setAttribute(ExifInterface.TAG_DATETIME, taken)
+            saveAttributes()
+        }
+        if (specCompliant) {
+            val bytes = file.readBytes()
+            if (!ExifUserComment.markUndefined(bytes)) throw IOException("UserComment layout not recognised")
+            file.writeBytes(bytes)
+        }
+        // Never hand back a file we can't read back. The AndroidX reader drops the character code.
+        ExifInterface(file.path).getAttribute(ExifInterface.TAG_USER_COMMENT) == comment
+    } catch (unsupported: IOException) {
+        false
+    } catch (malformed: RuntimeException) {
+        false
     }
 
     /** Puts [original] back, so a failed or partial write can never leave a damaged image. */
