@@ -1,5 +1,6 @@
 package com.visionstudio.core.security
 
+import android.security.keystore.UserNotAuthenticatedException
 import app.cash.turbine.test
 import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.common.result.Result
@@ -42,6 +43,10 @@ class EncryptedSecurePreferencesRepositoryTest {
 
     private fun decryptFailure() =
         SecurityException("Could not decrypt value", AEADBadTagException("Tag mismatch"))
+
+    /** What opening the store throws when the master key no longer unwraps the stored keyset. */
+    private fun unusableMasterKey(message: String = "Signature/MAC verification failed") =
+        KeyStoreException(message, AEADBadTagException("Tag mismatch"))
 
     // region happy path
 
@@ -137,7 +142,7 @@ class EncryptedSecurePreferencesRepositoryTest {
 
     @Test
     fun `corrupted keystore on open is purged and reinitialised`() = runTest {
-        factory.createFailures += KeyStoreException("Signature/MAC verification failed")
+        factory.createFailures += unusableMasterKey()
         val repo = repository()
 
         val result = repo.setApiKey(EngineSlot.TEXT_TO_IMAGE, "fresh-key")
@@ -177,8 +182,8 @@ class EncryptedSecurePreferencesRepositoryTest {
 
     @Test
     fun `persistent corruption surfaces SecureStorageException after a single purge`() = runTest {
-        factory.createFailures += KeyStoreException("first")
-        factory.createFailures += KeyStoreException("second")
+        factory.createFailures += unusableMasterKey("first")
+        factory.createFailures += unusableMasterKey("second")
         val repo = repository()
 
         val error = repo.getApiKey(EngineSlot.TEXT_TO_IMAGE).exceptionOrNull()
@@ -190,14 +195,49 @@ class EncryptedSecurePreferencesRepositoryTest {
 
     @Test
     fun `purge failure surfaces SecureStorageException`() = runTest {
-        factory.createFailures += KeyStoreException("corrupt")
+        factory.createFailures += unusableMasterKey("corrupt")
         factory.purgeFailure = IllegalStateException("keystore locked")
         val repo = repository()
 
         val error = repo.getApiKey(EngineSlot.TEXT_TO_IMAGE).exceptionOrNull()
 
         assertTrue(error is VisionStudioException.SecureStorageException)
+        assertEquals(1, factory.purgeCount)
         assertTrue(repo.recoveryEvents.replayCache.isEmpty())
+    }
+
+    @Test
+    fun `a locked device never purges user data`() = runTest {
+        val repo = repository()
+        repo.setApiKey(EngineSlot.TEXT_TO_IMAGE, "keep-me")
+        factory.store.readFailure = {
+            SecurityException("Could not decrypt value", UserNotAuthenticatedException("Screen locked"))
+        }
+
+        val error = repo.getApiKey(EngineSlot.TEXT_TO_IMAGE).exceptionOrNull()
+
+        assertTrue(error is VisionStudioException.SecureStorageException)
+        assertTrue((error as VisionStudioException.SecureStorageException).requiresUserAuthentication)
+        assertTrue(error.isRetryable)
+        assertEquals(0, factory.purgeCount)
+        assertTrue(repo.recoveryEvents.replayCache.isEmpty())
+        factory.store.readFailure = null
+        assertEquals("keep-me", repo.getApiKey(EngineSlot.TEXT_TO_IMAGE).getOrThrow())
+    }
+
+    @Test
+    fun `an unclassified keystore failure on open never purges`() = runTest {
+        factory.createFailures += KeyStoreException("keystore unavailable")
+        val repo = repository()
+
+        val error = repo.getApiKey(EngineSlot.TEXT_TO_IMAGE).exceptionOrNull()
+
+        assertTrue(error is VisionStudioException.SecureStorageException)
+        assertEquals(0, factory.purgeCount)
+        assertTrue(repo.recoveryEvents.replayCache.isEmpty())
+        // The next open succeeds against the untouched store.
+        assertEquals(Result.Success(Unit), repo.setApiKey(EngineSlot.TEXT_TO_IMAGE, "sk-later"))
+        assertEquals(0, factory.purgeCount)
     }
 
     @Test

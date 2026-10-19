@@ -29,10 +29,12 @@ import kotlin.coroutines.cancellation.CancellationException
  * [SecurePreferencesRepository] backed by EncryptedSharedPreferences (AES-256-SIV keys,
  * AES-256-GCM values) under an AndroidKeyStore AES-256-GCM master key.
  *
- * Corruption recovery: if opening, reading or writing fails with a Keystore or crypto error
- * (see [isKeystoreCorruption]), the store is purged (file, keysets and master key), reopened
- * empty, a [KeystoreRecovery] is emitted, and the operation is retried once. If it fails a
- * second time the caller gets a [VisionStudioException.SecureStorageException].
+ * Corruption recovery: if opening, reading or writing fails with an error that proves the keys
+ * are permanently unreadable (see [KeystoreCorruption.isPermanentCorruption]), the store is
+ * purged (file, keysets and master key), reopened empty, a [KeystoreRecovery] is emitted, and the
+ * operation is retried once. If it fails a second time the caller gets a
+ * [VisionStudioException.SecureStorageException]. Any other failure, including a locked device or
+ * a transient Keystore error, is returned as that exception without touching the stored keys.
  *
  * Every Keystore and disk call runs on [ioDispatcher] behind a [Mutex], so recovery can never
  * race a concurrent read.
@@ -119,10 +121,14 @@ internal class EncryptedSecurePreferencesRepository @Inject constructor(
                 } catch (domain: VisionStudioException) {
                     Result.Error(domain)
                 } catch (other: Exception) {
+                    // Not corruption (that was handled in runWithRecoveryLocked): the keys are kept.
+                    val action = KeystoreCorruption.classify(other)
                     Result.Error(
                         VisionStudioException.SecureStorageException(
-                            other.message ?: "Secure storage failure",
-                            other,
+                            message = other.message ?: "Secure storage failure",
+                            cause = other,
+                            requiresUserAuthentication = action == KeystoreCorruption.Action.REQUIRE_USER_AUTH,
+                            retryable = action == KeystoreCorruption.Action.TRANSIENT_RETRY,
                         ),
                     )
                 }
@@ -133,7 +139,7 @@ internal class EncryptedSecurePreferencesRepository @Inject constructor(
         try {
             return block(openLocked())
         } catch (first: Exception) {
-            if (!first.isKeystoreCorruption()) throw first
+            if (!KeystoreCorruption.isPermanentCorruption(first)) throw first
             recoverLocked(first)
             try {
                 return block(openLocked())

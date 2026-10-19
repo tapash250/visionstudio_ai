@@ -17,3 +17,7 @@ dependencies {
     implementation(libs.androidx.security.crypto)
     implementation(libs.kotlinx.serialization.json)
 }
+
+dependencies {
+    testImplementation(libs.robolectric)
+}

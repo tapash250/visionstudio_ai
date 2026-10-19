@@ -67,11 +67,19 @@ sealed class VisionStudioException(
         message: String,
     ) : VisionStudioException(message)
 
-    /** Keystore / EncryptedSharedPreferences could not read or write a secret. */
+    /**
+     * Keystore / EncryptedSharedPreferences could not read or write a secret. The stored secrets
+     * were kept unless the store reported a recovery; [requiresUserAuthentication] means the
+     * device must be unlocked before retrying.
+     */
     class SecureStorageException(
         message: String,
         cause: Throwable? = null,
-    ) : VisionStudioException(message, cause)
+        val requiresUserAuthentication: Boolean = false,
+        private val retryable: Boolean = false,
+    ) : VisionStudioException(message, cause) {
+        override val isRetryable: Boolean get() = retryable || requiresUserAuthentication
+    }
 
     /**
      * The OS permission named by [permission] must be granted before this can succeed. Not a
