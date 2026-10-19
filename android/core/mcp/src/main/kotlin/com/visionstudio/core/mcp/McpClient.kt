@@ -24,7 +24,12 @@ import com.visionstudio.core.mcp.protocol.ProgressParams
 import com.visionstudio.core.mcp.protocol.RequestMeta
 import com.visionstudio.core.mcp.transport.SseEvent
 import com.visionstudio.core.mcp.transport.SseEventParser
+import com.visionstudio.core.mcp.transport.SseEventTooLargeException
+import com.visionstudio.core.mcp.transport.SseLineReader
 import io.ktor.client.HttpClient
+import io.ktor.client.network.sockets.ConnectTimeoutException
+import io.ktor.client.network.sockets.SocketTimeoutException
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
@@ -40,7 +45,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
-import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -252,15 +256,19 @@ class McpClient internal constructor(
                     )
                 }
                 val channel = response.bodyAsChannel()
-                val parser = SseEventParser()
+                val parser = SseEventParser(maxDataChars = config.maxEventBytes)
+                // One line may hold a whole event (a base64 image in one `data:` field), plus its field name.
+                val lines = SseLineReader(channel, maxLineBytes = config.maxEventBytes + SSE_FIELD_OVERHEAD)
                 while (true) {
-                    val line = channel.readUTF8Line() ?: break
+                    val line = lines.readLine() ?: break
                     parser.feedLine(line)?.let { handleEvent(it) }
                 }
             }
             failInFlight(VisionStudioException.NetworkException("MCP event stream closed by server"))
         } catch (cancellation: CancellationException) {
             throw cancellation
+        } catch (oversized: SseEventTooLargeException) {
+            failInFlight(oversizedFrame(oversized))
         } catch (failure: Throwable) {
             failInFlight(failure.toVisionStudioException())
         }
@@ -317,15 +325,23 @@ class McpClient internal constructor(
         }
     }
 
-    /** The client exposes no capabilities, so it answers only `ping`. */
-    private suspend fun answerServerRequest(id: JsonElement, method: String) {
+    /**
+     * The client exposes no capabilities, so it answers only `ping`. The reply is posted on its
+     * own coroutine: this runs on the stream reader, and a slow POST must not hold up every other
+     * response and notification queued behind it on the stream.
+     */
+    private fun answerServerRequest(id: JsonElement, method: String) {
         val reply = if (method == McpMethods.PING) {
             JsonRpcResponse(id = id, result = JsonObject(emptyMap()))
         } else {
             JsonRpcResponse(id = id, error = JsonRpcError(JsonRpcError.METHOD_NOT_FOUND, "Method not supported: $method"))
         }
-        val body = withContext(defaultDispatcher) { McpJson.encodeToString(JsonRpcResponse.serializer(), reply) }
-        runCatching { postMessage(body) }
+        scope.launch {
+            runCatching {
+                val body = withContext(defaultDispatcher) { McpJson.encodeToString(JsonRpcResponse.serializer(), reply) }
+                postMessage(body, notificationDeadlineMillis())
+            }
+        }
     }
 
     private suspend fun <P, R> requestTyped(
@@ -362,8 +378,7 @@ class McpClient internal constructor(
             val body = withContext(defaultDispatcher) {
                 McpJson.encodeToString(JsonRpcRequest.serializer(), JsonRpcRequest(id = id, method = method, params = params))
             }
-            postMessage(body)
-            val response = awaitResponse(id, method, deferred, timeoutMillis)
+            val response = sendAndAwait(id, method, body, deferred, timeoutMillis)
             response.error?.let { error ->
                 throw VisionStudioException.ProtocolException(error.code, "MCP $method failed: ${error.message}")
             }
@@ -373,15 +388,23 @@ class McpClient internal constructor(
         }
     }
 
-    /** Waits for the correlated response; on timeout or cancellation tells the server to stop. */
-    private suspend fun awaitResponse(
+    /**
+     * Posts [body] and waits for the correlated response, all within [timeoutMillis]: a POST that
+     * stalls uses up the same budget instead of adding its own on top. On timeout or cancellation
+     * the server is told to stop.
+     */
+    private suspend fun sendAndAwait(
         id: Long,
         method: String,
+        body: String,
         deferred: CompletableDeferred<JsonRpcResponse>,
         timeoutMillis: Long,
     ): JsonRpcResponse {
         val response = try {
-            withTimeoutOrNull(timeoutMillis) { deferred.await() }
+            withTimeoutOrNull(timeoutMillis) {
+                postMessage(body, timeoutMillis)
+                deferred.await()
+            }
         } catch (cancellation: CancellationException) {
             sendCancelled(id, "Client cancelled $method")
             throw cancellation
@@ -397,8 +420,11 @@ class McpClient internal constructor(
         val body = withContext(defaultDispatcher) {
             McpJson.encodeToString(JsonRpcNotification.serializer(), JsonRpcNotification(method = method, params = params))
         }
-        postMessage(body)
+        postMessage(body, notificationDeadlineMillis())
     }
+
+    /** Notifications and replies expect nothing back, so they get a short deadline of their own. */
+    private fun notificationDeadlineMillis(): Long = minOf(config.requestTimeoutMillis, NOTIFICATION_POST_TIMEOUT_MILLIS)
 
     private fun sendCancelled(id: Long, reason: String) {
         scope.launch(NonCancellable) {
@@ -411,15 +437,33 @@ class McpClient internal constructor(
         }
     }
 
-    private suspend fun postMessage(body: String) {
+    /**
+     * Posts one JSON-RPC message. [deadlineMillis] bounds this POST on its own HTTP timeouts,
+     * separately from the event stream, whose GET has none. A server may also answer inline, by
+     * holding this POST open until the result is ready, which is why the deadline is the request's.
+     */
+    private suspend fun postMessage(body: String, deadlineMillis: Long) {
         if (!endpoint.isCompleted) throw VisionStudioException.NetworkException("MCP endpoint not yet announced")
         val target = endpoint.await()
-        val response = withContext(ioDispatcher) {
-            httpClient.post(target) {
-                contentType(ContentType.Application.Json)
-                applyConfiguredHeaders()
-                setBody(body)
+        val response = try {
+            withContext(ioDispatcher) {
+                httpClient.post(target) {
+                    contentType(ContentType.Application.Json)
+                    applyConfiguredHeaders()
+                    setBody(body)
+                    timeout {
+                        connectTimeoutMillis = minOf(config.connectTimeoutMillis, deadlineMillis)
+                        requestTimeoutMillis = deadlineMillis
+                        socketTimeoutMillis = deadlineMillis
+                    }
+                }
             }
+        } catch (timedOut: HttpRequestTimeoutException) {
+            throw VisionStudioException.TimeoutException("MCP message POST timed out after ${deadlineMillis}ms", timedOut)
+        } catch (timedOut: ConnectTimeoutException) {
+            throw VisionStudioException.TimeoutException("MCP server did not accept the connection in time", timedOut)
+        } catch (timedOut: SocketTimeoutException) {
+            throw VisionStudioException.TimeoutException("MCP message POST stalled", timedOut)
         }
         response.throwIfUnsuccessful()
         // Lenient path: some servers return the JSON-RPC response inline instead of over SSE.
@@ -479,6 +523,12 @@ class McpClient internal constructor(
         }
     }
 
+    private fun oversizedFrame(cause: Throwable) = VisionStudioException.ProtocolException(
+        rpcErrorCode = null,
+        message = "MCP server sent an event larger than ${config.maxEventBytes} bytes",
+        cause = cause,
+    )
+
     private fun failInFlight(error: VisionStudioException) {
         // Publish the failed state before waking callers, so anyone handling the error
         // already observes State.Failed (not a stale Ready) and can reconnect.
@@ -504,5 +554,9 @@ class McpClient internal constructor(
         const val NOTIFICATION_BUFFER = 64
         const val HTTP_PORT = 80
         const val HTTPS_PORT = 443
+        const val NOTIFICATION_POST_TIMEOUT_MILLIS = 15_000L
+
+        /** Room for the field name in front of a line's value ("data: "). */
+        const val SSE_FIELD_OVERHEAD = 16
     }
 }

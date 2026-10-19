@@ -4,9 +4,11 @@ import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.mcp.protocol.JsonRpcError
 import com.visionstudio.core.mcp.protocol.MCP_PROTOCOL_VERSION
 import com.visionstudio.core.mcp.protocol.McpProgress
+import com.visionstudio.core.mcp.protocol.McpTool
 import com.visionstudio.core.mcp.protocol.ToolContent
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.cancel
@@ -48,6 +50,7 @@ class McpClientTest {
         requestTimeoutMillis: Long = 5_000,
         connectTimeoutMillis: Long = 2_000,
         headers: Map<String, String> = mapOf("Authorization" to "Bearer test-token"),
+        maxEventBytes: Int = McpServerConfig.DEFAULT_MAX_EVENT_BYTES,
     ): McpClient = McpClientFactory(
         httpClient = createMcpHttpClient(engine),
         ioDispatcher = Dispatchers.IO,
@@ -59,6 +62,7 @@ class McpClientTest {
             headers = headers,
             connectTimeoutMillis = connectTimeoutMillis,
             requestTimeoutMillis = requestTimeoutMillis,
+            maxEventBytes = maxEventBytes,
         ),
     ).also { clients += it }
 
@@ -448,6 +452,102 @@ class McpClientTest {
 
         assertEquals("done", result.text)
         assertTrue(client.state.value is McpClient.State.Ready)
+    }
+
+    @Test
+    fun `a stalled post counts against the request deadline instead of hanging`() = mcpTest {
+        val server = FakeMcpServer()
+        val stall = CompletableDeferred<Unit>()
+        server.beforePostResponse = { message -> if (message["method"]?.jsonPrimitive?.content == "tools/call") stall.await() }
+        val client = server.client()
+        client.connect()
+
+        val started = System.nanoTime()
+        expectFailure<VisionStudioException.TimeoutException> {
+            client.callTool("generate_image", JsonObject(emptyMap()), timeoutMillis = 300)
+        }
+        val elapsedMillis = (System.nanoTime() - started) / 1_000_000
+
+        assertTrue("timed out after ${elapsedMillis}ms, expected about 300ms", elapsedMillis < 2_000)
+        stall.complete(Unit)
+    }
+
+    @Test
+    fun `a slow reply to a server ping does not hold up responses behind it`() = mcpTest {
+        val server = FakeMcpServer()
+        val stall = CompletableDeferred<Unit>()
+        // The client's reply to the server's ping is a POST that the server holds open.
+        server.beforePostResponse = { message -> if (message["id"]?.jsonPrimitive?.content == "srv-slow") stall.await() }
+        server.onRequest = { message ->
+            if (message["method"]?.jsonPrimitive?.content == "tools/list") {
+                listOf(
+                    FakeMcpServer.sseFrame("message", """{"jsonrpc":"2.0","id":"srv-slow","method":"ping"}"""),
+                    FakeMcpServer.result(message["id"]!!, """{"tools":[]}"""),
+                )
+            } else {
+                defaultHandler(message)
+            }
+        }
+        val client = server.client()
+        client.connect()
+
+        val tools = client.listTools()
+
+        assertEquals("the response queued behind the ping arrived while its reply was still stalled", emptyList<McpTool>(), tools)
+        assertFalse(stall.isCompleted)
+        stall.complete(Unit)
+    }
+
+    @Test
+    fun `an endless line fails the session with a protocol error instead of exhausting memory`() = mcpTest {
+        val server = FakeMcpServer()
+        val client = server.client(maxEventBytes = 1_024)
+        client.connect()
+        server.onRequest = { emptyList() }
+
+        val call = async { runCatching { client.callTool("generate_image", JsonObject(emptyMap())) } }
+        eventually { server.requestsFor("tools/call").isNotEmpty() }
+        server.push("data: " + "A".repeat(4_096)) // no newline ever arrives
+
+        val failure = call.await().exceptionOrNull()
+        assertTrue("expected ProtocolException, got $failure", failure is VisionStudioException.ProtocolException)
+        assertTrue(client.state.value is McpClient.State.Failed)
+    }
+
+    @Test
+    fun `an event that never ends fails the session too`() = mcpTest {
+        val server = FakeMcpServer()
+        val client = server.client(maxEventBytes = 1_024)
+        client.connect()
+        server.onRequest = { emptyList() }
+
+        val call = async { runCatching { client.callTool("generate_image", JsonObject(emptyMap())) } }
+        eventually { server.requestsFor("tools/call").isNotEmpty() }
+        // Short lines, but the blank line that would end the event never comes.
+        // Once the client gives up it cancels the stream, so later writes may fail; that is expected.
+        runCatching { repeat(40) { server.push("data: " + "B".repeat(60) + "\n") } }
+
+        val failure = call.await().exceptionOrNull()
+        assertTrue("expected ProtocolException, got $failure", failure is VisionStudioException.ProtocolException)
+    }
+
+    @Test
+    fun `an event right at the size limit is still delivered`() = mcpTest {
+        val server = FakeMcpServer()
+        val client = server.client(maxEventBytes = 4_096)
+        client.connect()
+        val prompt = "\u30F3".repeat(1_000) // multi-byte characters, well inside the limit
+        server.onRequest = { message ->
+            if (message["method"]?.jsonPrimitive?.content == "tools/call") {
+                listOf(FakeMcpServer.result(message["id"]!!, """{"content":[{"type":"text","text":"$prompt"}],"isError":false}"""))
+            } else {
+                defaultHandler(message)
+            }
+        }
+
+        val result = client.callTool("generate_image", JsonObject(emptyMap()))
+
+        assertEquals(prompt, (result.content.single() as ToolContent.Text).text)
     }
 
     @Test

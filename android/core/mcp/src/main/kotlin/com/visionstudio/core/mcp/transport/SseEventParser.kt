@@ -13,8 +13,11 @@ data class SseEvent(
  * `field: value` lines (one optional leading space stripped), `:` comments ignored, multi-line
  * `data` joined with `\n`, an event dispatched on a blank line, and type defaulting to `message`.
  * An event left incomplete at end of stream is discarded, as the spec requires.
+ *
+ * [maxDataChars] bounds one event's joined `data`, so a server that never sends the blank line
+ * ending an event can't grow it without limit; exceeding it throws [SseEventTooLargeException].
  */
-class SseEventParser {
+class SseEventParser(private val maxDataChars: Int = DEFAULT_MAX_DATA_CHARS) {
     private val data = StringBuilder()
     private var hasData = false
     private var eventType: String? = null
@@ -38,6 +41,8 @@ class SseEventParser {
         when (field) {
             "event" -> eventType = value
             "data" -> {
+                val separator = if (hasData) 1 else 0
+                if (data.length.toLong() + separator + value.length > maxDataChars) throw SseEventTooLargeException(maxDataChars)
                 if (hasData) data.append('\n')
                 data.append(value)
                 hasData = true
@@ -67,5 +72,15 @@ class SseEventParser {
 
     companion object {
         const val DEFAULT_EVENT: String = "message"
+
+        /**
+         * MCP tool results carry images as base64 inside a single JSON message, so one event can
+         * legitimately be several megabytes: 16 Mi characters covers a ~12 MB image.
+         */
+        const val DEFAULT_MAX_DATA_CHARS: Int = 16 * 1024 * 1024
     }
 }
+
+/** One SSE line or event exceeded its size limit; the stream can't be trusted past this point. */
+class SseEventTooLargeException(val limitChars: Int) :
+    java.io.IOException("Server-sent event exceeded $limitChars characters")

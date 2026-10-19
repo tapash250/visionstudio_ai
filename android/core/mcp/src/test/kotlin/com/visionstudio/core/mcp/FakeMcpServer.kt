@@ -38,6 +38,12 @@ class FakeMcpServer(
     val received: MutableList<JsonObject> = Collections.synchronizedList(mutableListOf())
     val receivedHeaders: MutableList<Map<String, String>> = Collections.synchronizedList(mutableListOf())
 
+    /**
+     * Called before a POST is answered; suspending here simulates a server or network that holds
+     * the POST open. Receives the posted message.
+     */
+    var beforePostResponse: suspend (JsonObject) -> Unit = {}
+
     /** Returns raw SSE frames (already formatted) to push after receiving a request. */
     var onRequest: suspend FakeMcpServer.(JsonObject) -> List<String> = { message -> defaultHandler(message) }
 
@@ -61,6 +67,7 @@ class FakeMcpServer(
                 val body = (request.body as TextContent).text
                 val message = Json.parseToJsonElement(body).jsonObject
                 received += message
+                beforePostResponse(message)
                 onRequest(message).forEach { push(it) }
                 respond("Accepted", HttpStatusCode.Accepted)
             }
