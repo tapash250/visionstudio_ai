@@ -26,6 +26,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -98,7 +99,7 @@ private fun MotionTile(motion: CameraMotion, selected: Boolean, phase: State<Flo
             .frostedGlass(
                 shape = StudioShapes.Card,
                 fill = if (selected) StudioGlassFillStrong else StudioGlassFillStrong.copy(alpha = 0.06f),
-                border = if (selected) TILE_GLOW else Brush.linearGradient(listOf(Color(0x1FFFFFFF), Color(0x1FFFFFFF))),
+                border = if (selected) TILE_GLOW else TILE_REST_BORDER,
             )
             .semantics { this.selected = selected }
             .tactileClickable(haptic = HapticPattern.Tick, role = Role.RadioButton, onClick = onClick)
@@ -202,6 +203,7 @@ internal fun DrawScope.drawMotion(motion: CameraMotion, t: Float, color: Color, 
 
 private val TILE_WIDTH = 84.dp
 private val TILE_GLOW = Brush.horizontalGradient(listOf(StudioIndigoBright, StudioCyan))
+private val TILE_REST_BORDER = SolidColor(Color(0x1FFFFFFF))
 private const val CLOCK_MILLIS = 1_800
 private const val REST_POSE = 0.5f
 private const val FRAME_ALPHA = 0.55f

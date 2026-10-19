@@ -3,6 +3,7 @@ package com.visionstudio.core.data.media
 import android.content.Context
 import android.net.Uri
 import com.visionstudio.core.common.dispatchers.IoDispatcher
+import com.visionstudio.core.common.export.StoragePaths
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -20,7 +21,7 @@ class MediaFileStore @Inject constructor(
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
-    private val root: File by lazy { File(context.filesDir, MEDIA_DIR) }
+    private val root: File by lazy { File(context.filesDir, StoragePaths.MEDIA_DIR) }
 
     suspend fun newFile(id: String, extension: String): File = withContext(io) {
         root.mkdirs()
@@ -37,8 +38,4 @@ class MediaFileStore @Inject constructor(
     }
 
     suspend fun delete(uri: String): Boolean = withContext(io) { fileOf(uri)?.delete() == true }
-
-    private companion object {
-        const val MEDIA_DIR = "media"
-    }
 }

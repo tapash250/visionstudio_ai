@@ -144,7 +144,7 @@ class VideoJobProcessorTest {
         val sink = RecordingSink()
         var engineFactory: suspend () -> GenerationEngine = { engine }
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        val repository = DefaultVideoJobRepository(dao, context, dispatcher, clock)
+        val repository = DefaultVideoJobRepository(dao, context, dispatcher, dispatcher, clock)
         val processor = VideoJobProcessor(dao, { engineFactory() }, sink, clock, dispatcher)
 
         suspend fun newJob(source: BinaryPayload? = null): String =
@@ -479,6 +479,83 @@ class VideoJobProcessorTest {
         assertTrue(outcome is VideoJobOutcome.Failed)
         assertEquals(0, rig.engine.submissions)
     }
+
+    // region flaws found in review
+
+    @Test
+    fun `a submit that timed out may already be running at the provider, so it is not blindly resubmitted`() = runTest {
+        val rig = Rig(this)
+        val id = rig.newJob()
+        rig.engine.onSubmit = { throw VisionStudioException.TimeoutException("read timed out") }
+
+        val outcome = rig.processor.run(id)
+
+        // A timeout after the request left the device is ambiguous: retrying could create (and bill) a second job.
+        assertTrue("was $outcome", outcome is VideoJobOutcome.Failed)
+        assertTrue((outcome as VideoJobOutcome.Failed).message.contains("may have started"))
+        assertEquals("FAILED", dao.statusOf(id))
+        assertEquals(1, rig.engine.submissions)
+    }
+
+    @Test
+    fun `a connection that never reached the provider is still safe to retry`() = runTest {
+        val rig = Rig(this)
+        val id = rig.newJob()
+        rig.engine.onSubmit = { throw VisionStudioException.NetworkException("Unable to resolve host") }
+
+        assertTrue(rig.processor.run(id) is VideoJobOutcome.Retry)
+        assertTrue(VideoJobStatus.of(dao.statusOf(id)!!).isActive)
+    }
+
+    @Test
+    fun `cancelling while the provider is accepting the job ends cancelled, not orphaned as polling`() = runTest {
+        val rig = Rig(this)
+        val id = rig.newJob()
+        rig.engine.onSubmit = {
+            dao.markCancelled(id, 0) // user taps Cancel while the submit call is in flight
+            Submission.Queued(RemoteJob("remote-1", "https://queue.fal.run/status"))
+        }
+
+        val outcome = rig.processor.run(id)
+
+        assertEquals(VideoJobOutcome.Cancelled, outcome)
+        assertEquals("never polled a job the user cancelled", 0, rig.engine.pollTimes.size)
+        assertEquals("CANCELLED", dao.statusOf(id))
+    }
+
+    @Test
+    fun `cancel then retry mid-poll makes the old run stand down instead of racing the new one`() = runTest {
+        val rig = Rig(this)
+        val id = rig.newJob()
+        rig.engine.pollScript += {
+            // While this poll is in flight the user cancels and immediately retries the job.
+            dao.markCancelled(id, 0)
+            dao.resetForRetry(id, 0)
+            JobStatus.InProgress(0.5f)
+        }
+        rig.engine.pollScript += { completedWith(videoOutput) } // would wrongly complete the *old* run
+
+        val outcome = rig.processor.run(id)
+
+        assertEquals(VideoJobOutcome.Cancelled, outcome)
+        assertEquals("the old run polled once and then stood down", 1, rig.engine.pollTimes.size)
+        assertEquals("the retried job is left for its own fresh run", "QUEUED", dao.statusOf(id))
+        assertTrue("and nothing was stored for it", rig.sink.stored.isEmpty())
+    }
+
+    @Test
+    fun `a corrupt stored handle fails the job instead of silently submitting again`() = runTest {
+        val rig = Rig(this)
+        val id = rig.newJob()
+        dao.setRemoteJob(id, "{this is not json", "REST|FAL_QUEUE|https://queue.fal.run|fal-ai/kling-video|", 0)
+
+        val outcome = rig.processor.run(id)
+
+        assertTrue("was $outcome", outcome is VideoJobOutcome.Failed)
+        assertEquals("a paid submission must not be repeated on a guess", 0, rig.engine.submissions)
+    }
+
+    // endregion
 
     // region repository
 

@@ -1,6 +1,7 @@
 package com.visionstudio.core.data.video
 
 import android.content.Context
+import com.visionstudio.core.common.dispatchers.DefaultDispatcher
 import com.visionstudio.core.common.dispatchers.IoDispatcher
 import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.database.VideoJobDao
@@ -10,6 +11,7 @@ import com.visionstudio.core.network.engine.BinaryPayload
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -58,6 +60,7 @@ internal class DefaultVideoJobRepository @Inject constructor(
     private val dao: VideoJobDao,
     @ApplicationContext private val context: Context,
     @IoDispatcher private val io: CoroutineDispatcher,
+    @DefaultDispatcher private val default: CoroutineDispatcher,
     private val clock: Clock,
 ) : VideoJobRepository {
 
@@ -100,8 +103,9 @@ internal class DefaultVideoJobRepository @Inject constructor(
         return entity.toJob()
     }
 
+    /** Each row's parameters are JSON; decode them on the Default dispatcher, not on whoever collects (usually Main). */
     override fun observeJobs(limit: Int): Flow<List<VideoJob>> =
-        dao.observeRecent(limit).map { rows -> rows.map { it.toJob() } }
+        dao.observeRecent(limit).map { rows -> rows.map { it.toJob() } }.flowOn(default)
 
     override suspend fun get(id: String): VideoJob? = dao.get(id)?.toJob()
 

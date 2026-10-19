@@ -12,7 +12,6 @@ dependencies {
     api(projects.core.common)
     api(projects.core.network)
     implementation(projects.core.database)
-    implementation(projects.core.security)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.androidx.exifinterface)
 

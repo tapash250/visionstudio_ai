@@ -13,6 +13,7 @@ dependencies {
     implementation(projects.core.model)
     implementation(projects.core.common)
     implementation(projects.core.data)
+    implementation(projects.core.network)
     implementation(projects.core.security)
 
     implementation(libs.androidx.activity.compose)
@@ -31,7 +32,6 @@ dependencies {
 
     // The worker tests drive the real Room DAO; production code only sees :core:data.
     testImplementation(projects.core.database)
-    testImplementation(projects.core.network)
     testImplementation(libs.room.runtime)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)

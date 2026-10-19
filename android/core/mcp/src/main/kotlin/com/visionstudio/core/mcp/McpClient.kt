@@ -219,12 +219,16 @@ class McpClient internal constructor(
 
     /** Fails in-flight requests, closes the stream and releases the scope. Terminal. */
     suspend fun close() {
-        connectMutex.withLock {
-            if (_state.value == State.Closed) return
-            teardownStream(VisionStudioException.NetworkException("MCP client closed"))
-            _state.value = State.Closed
+        // Releasing resources must finish even if the caller is itself being cancelled (a screen
+        // closing, a worker being stopped); otherwise the stream and scope would leak.
+        withContext(NonCancellable) {
+            connectMutex.withLock {
+                if (_state.value == State.Closed) return@withContext
+                teardownStream(VisionStudioException.NetworkException("MCP client closed"))
+                _state.value = State.Closed
+            }
+            scope.cancel()
         }
-        scope.cancel()
     }
 
     // region transport
@@ -294,15 +298,23 @@ class McpClient internal constructor(
     }
 
     private fun handleNotification(method: String, params: JsonElement?) {
-        if (method == McpMethods.PROGRESS && params != null) {
-            runCatching { McpJson.decodeFromJsonElement(ProgressParams.serializer(), params) }
-                .getOrNull()
-                ?.let { progress ->
-                    val token = progress.progressToken.jsonPrimitive.content
-                    progressHandlers[token]?.invoke(McpProgress(progress.progress, progress.total, progress.message))
-                }
-        }
+        if (method == McpMethods.PROGRESS && params != null) dispatchProgress(params)
         _notifications.tryEmit(McpNotification(method, params))
+    }
+
+    /**
+     * Progress is advisory. A malformed token, or a bug in the caller's callback, must never take
+     * down the shared event stream, because that would fail every other request in flight.
+     */
+    private fun dispatchProgress(params: JsonElement) {
+        val progress = runCatching { McpJson.decodeFromJsonElement(ProgressParams.serializer(), params) }.getOrNull() ?: return
+        val token = (progress.progressToken as? JsonPrimitive)?.contentOrNull ?: return
+        val handler = progressHandlers[token] ?: return
+        try {
+            handler(McpProgress(progress.progress, progress.total, progress.message))
+        } catch (callbackFailure: Exception) {
+            // Intentionally contained: the callback belongs to the caller, not to the transport.
+        }
     }
 
     /** The client exposes no capabilities, so it answers only `ping`. */

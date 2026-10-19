@@ -8,6 +8,10 @@ import com.visionstudio.core.mcp.protocol.ToolContent
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -378,6 +382,72 @@ class McpClientTest {
         server.push(FakeMcpServer.sseFrame("message", """{"jsonrpc":"2.0","id":"srv-1","method":"ping"}"""))
 
         eventually { server.received.any { it["id"]?.jsonPrimitive?.content == "srv-1" && it.containsKey("result") } }
+    }
+
+    @Test
+    fun `close completes even when called from a cancelled coroutine`() = mcpTest {
+        val server = FakeMcpServer()
+        val client = server.client()
+        client.connect()
+
+        // A caller being torn down (screen closed, worker stopped) still has to release the session.
+        val closer = launch(start = CoroutineStart.UNDISPATCHED) {
+            currentCoroutineContext().cancel()
+            runCatching { client.close() }
+        }
+        closer.join()
+
+        assertEquals("the client reached its terminal state despite the cancelled caller", McpClient.State.Closed, client.state.value)
+    }
+
+    @Test
+    fun `a malformed progress notification does not kill the session`() = mcpTest {
+        val server = FakeMcpServer()
+        server.onRequest = { message ->
+            val id = message["id"]
+            when {
+                id == null -> emptyList()
+                message["method"]!!.jsonPrimitive.content == "tools/call" -> listOf(
+                    // progressToken is an object, which has no string form
+                    FakeMcpServer.sseFrame("message", """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":{"a":1},"progress":1}}"""),
+                    FakeMcpServer.result(id, """{"content":[{"type":"text","text":"still alive"}]}"""),
+                )
+                else -> defaultHandler(message)
+            }
+        }
+        val client = server.client()
+        client.connect()
+
+        val result = client.callTool("generate_image", JsonObject(emptyMap()), onProgress = { })
+
+        assertEquals("still alive", result.text)
+        assertTrue(client.state.value is McpClient.State.Ready)
+    }
+
+    @Test
+    fun `a progress callback that throws does not kill the session either`() = mcpTest {
+        val server = FakeMcpServer()
+        server.onRequest = { message ->
+            val id = message["id"]
+            when {
+                id == null -> emptyList()
+                message["method"]!!.jsonPrimitive.content == "tools/call" -> {
+                    val token = message["params"]!!.jsonObject["_meta"]!!.jsonObject["progressToken"]!!
+                    listOf(
+                        FakeMcpServer.sseFrame("message", """{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":$token,"progress":1,"total":2}}"""),
+                        FakeMcpServer.result(id, """{"content":[{"type":"text","text":"done"}]}"""),
+                    )
+                }
+                else -> defaultHandler(message)
+            }
+        }
+        val client = server.client()
+        client.connect()
+
+        val result = client.callTool("generate_image", JsonObject(emptyMap()), onProgress = { error("UI callback bug") })
+
+        assertEquals("done", result.text)
+        assertTrue(client.state.value is McpClient.State.Ready)
     }
 
     @Test

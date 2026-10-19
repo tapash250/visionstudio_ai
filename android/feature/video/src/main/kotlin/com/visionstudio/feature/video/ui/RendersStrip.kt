@@ -19,7 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -120,7 +120,7 @@ private fun VideoTile(item: MediaItem, selected: Boolean, onClick: () -> Unit) {
 
 private fun Modifier.tileChrome(selected: Boolean, accent: Color): Modifier = this
     .glowingBorder(
-        brush = Brush.linearGradient(listOf(accent, accent)),
+        brush = SolidColor(accent),
         shape = StudioShapes.Control,
         width = if (selected) 1.5.dp else 0.dp,
         glowRadius = 6.dp,
