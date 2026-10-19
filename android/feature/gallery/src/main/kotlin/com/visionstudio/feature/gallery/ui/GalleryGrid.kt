@@ -52,6 +52,7 @@ import coil3.video.VideoFrameDecoder
 import com.visionstudio.core.designsystem.component.BlurHashImage
 import com.visionstudio.core.designsystem.haptics.HapticPattern
 import com.visionstudio.core.designsystem.haptics.rememberStudioHaptics
+import com.visionstudio.core.designsystem.modifier.shimmer
 import com.visionstudio.core.designsystem.theme.StudioIndigoBright
 import com.visionstudio.core.designsystem.theme.StudioOnyx
 import com.visionstudio.core.designsystem.theme.StudioShapes
@@ -83,6 +84,10 @@ import java.time.format.FormatStyle
  * tile plays at a time: the video nearest the middle of the screen, and only once scrolling has
  * settled, since a `SurfaceView` inside a moving list tears. [playbackEnabled] lets the host
  * screen suspend all previews (for example while the inspector sheet is open).
+ *
+ * Pagination: when the end comes within reach, [onLoadMore] is called. The scroll position is
+ * read off the composition path ([LazyStaggeredGridPaginationEffect]), so scrolling doesn't
+ * recompose this grid; stable keys and content types keep existing tiles when a page appends.
  */
 @OptIn(ExperimentalCoroutinesApi::class) // mapLatest: a newer pick must cancel a pending settle-delay
 @Composable
@@ -92,7 +97,17 @@ internal fun GalleryGrid(
     onOpen: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
     state: LazyStaggeredGridState = rememberLazyStaggeredGridState(),
+    canLoadMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
+    paginationKey: Any? = null,
 ) {
+    LazyStaggeredGridPaginationEffect(
+        state = state,
+        onLoadMore = onLoadMore,
+        enabled = canLoadMore,
+        resetKey = paginationKey,
+    )
+
     val context = LocalContext.current
     val imageLoader = remember(context) { buildImageLoader(context) }
     val cornerPx = with(LocalDensity.current) { TILE_CORNER.toPx() }
@@ -143,11 +158,18 @@ internal fun GalleryGrid(
         items(
             items = entries,
             key = { it.key },
-            contentType = { if (it is GridEntry.Header) HEADER_TYPE else TILE_TYPE },
-            span = { if (it is GridEntry.Header) StaggeredGridItemSpan.FullLine else StaggeredGridItemSpan.SingleLane },
+            contentType = { entry ->
+                when (entry) {
+                    is GridEntry.Header -> HEADER_TYPE
+                    is GridEntry.Tile -> TILE_TYPE
+                    GridEntry.More -> MORE_TYPE
+                }
+            },
+            span = { if (it is GridEntry.Tile) StaggeredGridItemSpan.SingleLane else StaggeredGridItemSpan.FullLine },
         ) { entry ->
             when (entry) {
                 is GridEntry.Header -> DayHeader(entry, Modifier.animateItem())
+                GridEntry.More -> MoreFooter()
                 is GridEntry.Tile -> MediaTile(
                     item = entry.item,
                     active = entry.item.id == activeVideoId,
@@ -186,7 +208,39 @@ private fun DayHeader(header: GridEntry.Header, modifier: Modifier = Modifier) {
                     onDrawBehind { drawRect(rule) }
                 },
         )
-        Text(stringResource(R.string.day_items, header.count), style = VisionStudioTheme.typography.monoSmall, color = StudioTextSecondary)
+        header.count?.let { count ->
+            Text(stringResource(R.string.day_items, count), style = VisionStudioTheme.typography.monoSmall, color = StudioTextSecondary)
+        }
+    }
+}
+
+/**
+ * Sits at the end of a grid with more to load. Local pages arrive in milliseconds, so instead of
+ * a spinner that would only flicker, two placeholder tiles shimmer where the next row will be.
+ */
+@Composable
+private fun MoreFooter() {
+    val description = stringResource(R.string.vault_loading_more)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp)
+            .semantics { contentDescription = description },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        repeat(COLUMNS) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(MORE_PLACEHOLDER_HEIGHT)
+                    .clip(StudioShapes.Card)
+                    .drawWithCache {
+                        val fill = Brush.verticalGradient(listOf(StudioOnyx.copy(alpha = 0.55f), StudioOnyx.copy(alpha = 0.25f)))
+                        onDrawBehind { drawRect(fill) }
+                    }
+                    .shimmer(),
+            )
+        }
     }
 }
 
@@ -273,6 +327,8 @@ private fun buildImageLoader(context: Context): ImageLoader =
 internal const val MEDIA_KEY_PREFIX = "media-"
 private const val HEADER_TYPE = "header"
 private const val TILE_TYPE = "tile"
+private const val MORE_TYPE = "more"
+private val MORE_PLACEHOLDER_HEIGHT = 120.dp
 private const val COLUMNS = 2
 private const val SETTLE_MILLIS = 250L
 private const val MIN_TILE_RATIO = 0.55f

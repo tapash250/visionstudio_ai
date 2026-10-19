@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.visionstudio.core.common.result.Result
 import com.visionstudio.core.data.generation.GenerationEvent
 import com.visionstudio.core.data.generation.GenerationRepository
+import com.visionstudio.core.data.generation.MediaCounts
 import com.visionstudio.core.data.media.MediaInspector
 import com.visionstudio.core.data.media.SourceImageLoader
 import com.visionstudio.core.data.video.VideoJob
@@ -323,7 +324,9 @@ class VideoViewModelTest {
         val recent = MutableStateFlow<List<MediaItem>>(emptyList())
         override fun generate(slot: EngineSlot, parameters: GenerationParameters, sourceImage: BinaryPayload?, mask: BinaryPayload?): Flow<GenerationEvent> = flowOf()
         override fun observeRecent(slot: EngineSlot, limit: Int): Flow<List<MediaItem>> = recent
-        override fun observeAll(): Flow<List<MediaItem>> = recent
+        override fun observeLibrary(type: MediaType?, limit: Int): Flow<List<MediaItem>> = recent
+        override fun observeCounts(): Flow<MediaCounts> = flowOf(MediaCounts())
+        override fun observeItem(id: String): Flow<MediaItem?> = flowOf(null)
         override suspend fun delete(item: MediaItem) = Unit
     }
 

@@ -36,7 +36,29 @@ class GalleryModelTest {
         when (it) {
             is GridEntry.Header -> "H:${it.bucket}:${it.count}"
             is GridEntry.Tile -> "T:${it.item.id}"
+            GridEntry.More -> "MORE"
         }
+    }
+
+    @Test
+    fun `a partial window withholds only the oldest day's count and ends with More`() {
+        val items = listOf(item("today", now), item("old1", at(2025, 1, 5, hour = 9)), item("old2", at(2025, 1, 5, hour = 8)))
+
+        val grid = buildGrid(items, GalleryFilter.ALL, now, zone, complete = false).describe()
+
+        assertEquals(listOf("H:Today:1", "T:today", "H:On(date=2025-01-05):null", "T:old1", "T:old2", "MORE"), grid)
+    }
+
+    @Test
+    fun `items created in the same millisecond are ordered by id, newest id first`() {
+        val items = listOf(item("a", now), item("c", now), item("b", now))
+
+        assertEquals(listOf("H:Today:3", "T:c", "T:b", "T:a"), buildGrid(items, GalleryFilter.ALL, now, zone).describe())
+    }
+
+    @Test
+    fun `an empty partial window has no footer`() {
+        assertTrue(buildGrid(emptyList(), GalleryFilter.ALL, now, zone, complete = false).isEmpty())
     }
 
     @Test

@@ -130,6 +130,9 @@ fun GalleryScreen(
                             playbackEnabled = state.selected == null,
                             onOpen = { onIntent(GalleryIntent.Open(it.id)) },
                             state = gridState,
+                            canLoadMore = !state.endReached && !state.isLoadingMore,
+                            onLoadMore = { onIntent(GalleryIntent.LoadMore) },
+                            paginationKey = state.filter,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }

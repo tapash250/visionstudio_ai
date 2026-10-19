@@ -7,10 +7,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-enum class GalleryFilter {
-    ALL,
-    IMAGES,
-    VIDEOS,
+enum class GalleryFilter(val mediaType: MediaType?) {
+    ALL(null),
+    IMAGES(MediaType.IMAGE),
+    VIDEOS(MediaType.VIDEO),
     ;
 
     fun accepts(item: MediaItem): Boolean = when (this) {
@@ -28,17 +28,23 @@ sealed interface DayBucket {
     data class On(val date: LocalDate) : DayBucket
 }
 
-/** One row of the grid: a full-width day header, or a media tile. */
+/** One row of the grid: a full-width day header, a media tile, or the "more below" footer. */
 @Immutable
 sealed interface GridEntry {
     val key: String
 
-    data class Header(val bucket: DayBucket, val count: Int) : GridEntry {
+    /** [count] is null when only part of that day is loaded yet, so no number would be true. */
+    data class Header(val bucket: DayBucket, val count: Int?) : GridEntry {
         override val key: String get() = "header-${bucket.keyPart()}"
     }
 
     data class Tile(val item: MediaItem) : GridEntry {
         override val key: String get() = "media-${item.id}"
+    }
+
+    /** Ends a grid that has more items to load. */
+    data object More : GridEntry {
+        override val key: String get() = "more"
     }
 }
 
@@ -51,31 +57,39 @@ private fun DayBucket.keyPart(): String = when (this) {
 /**
  * Filters [items], orders them newest first, and lays them out under a header per calendar day
  * (in [zone], so "yesterday" means the user's yesterday). Items sharing a day keep their order.
+ *
+ * [complete] says whether [items] is the whole (filtered) library. When it isn't, the oldest day
+ * may continue past the loaded window, so its header carries no count, and the grid ends with
+ * [GridEntry.More].
  */
 fun buildGrid(
     items: List<MediaItem>,
     filter: GalleryFilter,
     nowEpochMillis: Long,
     zone: ZoneId,
+    complete: Boolean = true,
 ): List<GridEntry> {
     val today = Instant.ofEpochMilli(nowEpochMillis).atZone(zone).toLocalDate()
     val byDay = items
         .asSequence()
         .filter(filter::accepts)
-        .sortedByDescending { it.createdAtEpochMillis }
+        .sortedWith(compareByDescending<MediaItem> { it.createdAtEpochMillis }.thenByDescending { it.id })
         .groupBy { Instant.ofEpochMilli(it.createdAtEpochMillis).atZone(zone).toLocalDate() }
 
     return buildList {
         // groupBy keeps first-seen order, which after the sort is newest day first.
+        val oldestDay = byDay.keys.lastOrNull()
         for ((date, dayItems) in byDay) {
             val bucket = when (date) {
                 today -> DayBucket.Today
                 today.minusDays(1) -> DayBucket.Yesterday
                 else -> DayBucket.On(date)
             }
-            add(GridEntry.Header(bucket, dayItems.size))
+            val countKnown = complete || date != oldestDay
+            add(GridEntry.Header(bucket, if (countKnown) dayItems.size else null))
             dayItems.forEach { add(GridEntry.Tile(it)) }
         }
+        if (!complete && byDay.isNotEmpty()) add(GridEntry.More)
     }
 }
 

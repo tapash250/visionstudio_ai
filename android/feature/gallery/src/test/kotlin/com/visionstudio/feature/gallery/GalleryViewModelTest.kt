@@ -8,6 +8,7 @@ import com.visionstudio.core.common.export.MediaExporter
 import com.visionstudio.core.common.result.Result
 import com.visionstudio.core.data.generation.GenerationEvent
 import com.visionstudio.core.data.generation.GenerationRepository
+import com.visionstudio.core.data.generation.MediaCounts
 import com.visionstudio.core.data.video.Clock
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.model.GenerationParameters
@@ -21,6 +22,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -46,10 +48,25 @@ class GalleryViewModelTest {
     private val deleted = mutableListOf<String>()
     private val now = 1_800_000_000_000L
 
+    /** Every window the ViewModel asked for, in order, as (type, limit). */
+    private val windowRequests = mutableListOf<Pair<MediaType?, Int>>()
+
+    /** Mirrors the Room queries: newest first with id as tie-break, filter before limit. */
     private val repository = object : GenerationRepository {
         override fun generate(slot: EngineSlot, parameters: GenerationParameters, sourceImage: BinaryPayload?, mask: BinaryPayload?): Flow<GenerationEvent> = emptyFlow()
         override fun observeRecent(slot: EngineSlot, limit: Int): Flow<List<MediaItem>> = library
-        override fun observeAll(): Flow<List<MediaItem>> = library
+        override fun observeLibrary(type: MediaType?, limit: Int): Flow<List<MediaItem>> {
+            windowRequests += type to limit
+            return library.map { all ->
+                all.filter { type == null || it.type == type }
+                    .sortedWith(compareByDescending<MediaItem> { it.createdAtEpochMillis }.thenByDescending { it.id })
+                    .take(limit)
+            }
+        }
+        override fun observeCounts(): Flow<MediaCounts> = library.map { all ->
+            MediaCounts(images = all.count { it.type == MediaType.IMAGE }, videos = all.count { it.type == MediaType.VIDEO })
+        }
+        override fun observeItem(id: String): Flow<MediaItem?> = library.map { all -> all.firstOrNull { it.id == id } }
         override suspend fun delete(item: MediaItem) {
             deleted += item.id
             library.value = library.value.filterNot { it.id == item.id }
@@ -206,6 +223,109 @@ class GalleryViewModelTest {
             assertTrue(deleted.isEmpty())
         }
     }
+
+    // region paging
+
+    private fun manyImages(count: Int) = (1..count).map { item("img-%03d".format(it), ageMillis = it.toLong()) }
+
+    @Test
+    fun `only the first page is loaded, while counts cover the whole library`() {
+        library.value = manyImages(100)
+        viewModel().collecting { state ->
+            assertEquals(GalleryViewModel.PAGE_SIZE, state().tileIds().size)
+            assertEquals(100, state().totalCount)
+            assertFalse(state().endReached)
+            assertTrue("the grid says there is more", state().entries.last() == GridEntry.More)
+        }
+    }
+
+    @Test
+    fun `loading more appends the next page in order, then stops at the end`() {
+        library.value = manyImages(100)
+        val vm = viewModel()
+        vm.collecting { state ->
+            val firstPage = state().tileIds()
+
+            vm.onIntent(GalleryIntent.LoadMore)
+            assertEquals(80, state().tileIds().size)
+            assertEquals("earlier tiles never move", firstPage, state().tileIds().take(40))
+
+            vm.onIntent(GalleryIntent.LoadMore)
+            assertEquals(100, state().tileIds().size)
+            assertTrue(state().endReached)
+            assertFalse(state().entries.contains(GridEntry.More))
+            assertEquals(manyImages(100).map { it.id }, state().tileIds())
+
+            val requestsAtEnd = windowRequests.size
+            vm.onIntent(GalleryIntent.LoadMore)
+            assertEquals("nothing is requested past the end", requestsAtEnd, windowRequests.size)
+        }
+    }
+
+    @Test
+    fun `a library that fits in one page is complete straight away`() {
+        library.value = manyImages(5)
+        viewModel().collecting { state ->
+            assertTrue(state().endReached)
+            assertEquals(listOf(5), state().entries.filterIsInstance<GridEntry.Header>().map { it.count })
+        }
+    }
+
+    @Test
+    fun `the oldest day's count is withheld until that day is fully loaded`() {
+        // 60 items on one day: the first page shows 40 of them, so "40" would be a wrong count.
+        library.value = manyImages(60)
+        val vm = viewModel()
+        vm.collecting { state ->
+            assertEquals(listOf<Int?>(null), state().entries.filterIsInstance<GridEntry.Header>().map { it.count })
+            vm.onIntent(GalleryIntent.LoadMore)
+            assertEquals(listOf<Int?>(60), state().entries.filterIsInstance<GridEntry.Header>().map { it.count })
+        }
+    }
+
+    @Test
+    fun `changing the filter starts again from its first page`() {
+        library.value = manyImages(100) + (1..50).map { item("vid-%03d".format(it), MediaType.VIDEO, ageMillis = 1_000L + it) }
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.LoadMore)
+            assertEquals(80, state().tileIds().size)
+
+            vm.onIntent(GalleryIntent.SetFilter(GalleryFilter.VIDEOS))
+
+            assertEquals(GalleryViewModel.PAGE_SIZE, state().tileIds().size)
+            assertTrue(state().tileIds().all { it.startsWith("vid-") })
+            assertEquals(MediaType.VIDEO to GalleryViewModel.PAGE_SIZE, windowRequests.last())
+        }
+    }
+
+    @Test
+    fun `a new creation appears at the top without losing the loaded pages`() {
+        library.value = manyImages(100)
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.LoadMore)
+            library.value = listOf(item("fresh", ageMillis = 0)) + library.value
+
+            assertEquals("fresh", state().tileIds().first())
+            assertEquals(80, state().tileIds().size)
+            assertEquals(101, state().totalCount)
+        }
+    }
+
+    @Test
+    fun `an open item stays open even when it is outside the current filter`() {
+        library.value = listOf(item("img"), item("vid", MediaType.VIDEO))
+        val vm = viewModel()
+        vm.collecting { state ->
+            vm.onIntent(GalleryIntent.Open("img"))
+            vm.onIntent(GalleryIntent.SetFilter(GalleryFilter.VIDEOS))
+
+            assertEquals("img", state().selected?.id)
+        }
+    }
+
+    // endregion
 
     // region export and share
 

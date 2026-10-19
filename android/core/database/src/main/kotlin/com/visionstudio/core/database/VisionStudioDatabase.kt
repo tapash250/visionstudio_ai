@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [GenerationHistoryEntity::class, VideoJobEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class VisionStudioDatabase : RoomDatabase() {

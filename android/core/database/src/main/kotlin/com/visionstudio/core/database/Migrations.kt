@@ -23,4 +23,23 @@ val MIGRATION_1_2: Migration = object : Migration(1, 2) {
     }
 }
 
-val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2)
+/**
+ * v2 → v3: the Vault now pages newest first with `id` as tie-break, so the two indexes behind
+ * its queries gain `id` and cover that sort exactly. Indexes only; no row is touched.
+ */
+val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP INDEX IF EXISTS `index_generation_history_created_at`")
+        db.execSQL("DROP INDEX IF EXISTS `index_generation_history_media_type_created_at`")
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_generation_history_created_at_id` " +
+                "ON `generation_history` (`created_at`, `id`)",
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_generation_history_media_type_created_at_id` " +
+                "ON `generation_history` (`media_type`, `created_at`, `id`)",
+        )
+    }
+}
+
+val ALL_MIGRATIONS: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)

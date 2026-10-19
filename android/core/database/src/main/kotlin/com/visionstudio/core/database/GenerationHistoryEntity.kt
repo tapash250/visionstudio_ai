@@ -13,9 +13,10 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "generation_history",
     indices = [
-        Index("created_at"),
+        // The Vault pages newest first with `id` as tie-break, so these cover its sort exactly.
+        Index("created_at", "id"),
+        Index("media_type", "created_at", "id"),
         Index("slot", "created_at"),
-        Index("media_type", "created_at"),
         Index("task_id"),
     ],
 )

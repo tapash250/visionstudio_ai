@@ -16,13 +16,17 @@ import com.visionstudio.feature.gallery.model.GridEntry
 import com.visionstudio.feature.gallery.model.buildGrid
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -59,6 +63,10 @@ data class GalleryUiState(
     val videoCount: Int = 0,
     val selected: MediaItem? = null,
     val export: ExportState = ExportState.Idle,
+    /** Every item matching the filter is loaded; scrolling further loads nothing more. */
+    val endReached: Boolean = false,
+    /** A larger window was requested and hasn't arrived yet. */
+    val isLoadingMore: Boolean = false,
 ) {
     val isLibraryEmpty: Boolean get() = loaded && totalCount == 0
     val isFilterEmpty: Boolean get() = loaded && totalCount > 0 && entries.isEmpty()
@@ -78,14 +86,23 @@ sealed interface GalleryIntent {
 
     /** The user answered the storage-permission prompt (Android 8-9). */
     data class StoragePermissionResult(val granted: Boolean) : GalleryIntent
+
+    /** The grid is near its end: load the next page. Ignored while one is loading or at the end. */
+    data object LoadMore : GalleryIntent
 }
 
 /**
- * Presents the whole Room history. The list is shaped (filtered, sorted, grouped by day) on the
- * Default dispatcher, off the main thread. The open item is tracked by id and resolved against the
- * live list, so if it disappears (deleted here or elsewhere) the sheet closes by itself instead of
+ * Presents the Room history a page at a time. The grid observes the newest N items for the
+ * current filter, and [GalleryIntent.LoadMore] raises N by [PAGE_SIZE]. Because that query is
+ * live, new creations and deletions show up immediately, which fixed cursor pages would miss, and
+ * its total order means a larger window only appends. Counts come from their own query, so they
+ * always describe the whole library. Shaping (grouping by day) runs on the Default dispatcher.
+ *
+ * The open item is observed by id on its own, so it stays correct whatever page or filter is
+ * showing, and if it disappears (deleted here or elsewhere) the sheet closes by itself instead of
  * pointing at stale data.
  */
+@OptIn(ExperimentalCoroutinesApi::class) // flatMapLatest: a new filter or window replaces the old query
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
     private val repository: GenerationRepository,
@@ -95,6 +112,7 @@ class GalleryViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val filter = MutableStateFlow(GalleryFilter.ALL)
+    private val limit = MutableStateFlow(PAGE_SIZE)
     private val selectedId = MutableStateFlow<String?>(null)
     private val exportState = MutableStateFlow<ExportState>(ExportState.Idle)
     private val _events = Channel<GalleryEvent>(Channel.BUFFERED)
@@ -102,16 +120,36 @@ class GalleryViewModel @Inject constructor(
     /** Share requests. A channel, so each is delivered to the screen exactly once. */
     val events: Flow<GalleryEvent> = _events.receiveAsFlow()
 
-    val uiState: StateFlow<GalleryUiState> = combine(repository.observeAll(), filter, selectedId, exportState) { items, filter, selectedId, export ->
+    /** The loaded window, tagged with the filter and limit it answers, so stale pages are recognisable. */
+    private class Window(val filter: GalleryFilter, val limit: Int, val items: List<MediaItem>)
+
+    private val window: Flow<Window> = combine(filter, limit, ::Pair).flatMapLatest { (filter, limit) ->
+        repository.observeLibrary(filter.mediaType, limit).map { Window(filter, limit, it) }
+    }
+
+    private val selected: Flow<MediaItem?> = selectedId.flatMapLatest { id ->
+        if (id == null) flowOf(null) else repository.observeItem(id)
+    }
+
+    val uiState: StateFlow<GalleryUiState> = combine(
+        window,
+        repository.observeCounts(),
+        limit,
+        selected,
+        exportState,
+    ) { window, counts, requestedLimit, selected, export ->
+        val complete = window.items.size < window.limit
         GalleryUiState(
             loaded = true,
-            filter = filter,
-            entries = buildGrid(items, filter, clock.now(), ZoneId.systemDefault()),
-            totalCount = items.size,
-            imageCount = items.count { GalleryFilter.IMAGES.accepts(it) },
-            videoCount = items.count { GalleryFilter.VIDEOS.accepts(it) },
-            selected = selectedId?.let { id -> items.firstOrNull { it.id == id } },
+            filter = window.filter,
+            entries = buildGrid(window.items, window.filter, clock.now(), ZoneId.systemDefault(), complete),
+            totalCount = counts.total,
+            imageCount = counts.images,
+            videoCount = counts.videos,
+            selected = selected,
             export = export,
+            endReached = complete,
+            isLoadingMore = requestedLimit > window.limit,
         )
     }
         .flowOn(default)
@@ -119,14 +157,31 @@ class GalleryViewModel @Inject constructor(
 
     fun onIntent(intent: GalleryIntent) {
         when (intent) {
-            is GalleryIntent.SetFilter -> filter.value = intent.filter
+            is GalleryIntent.SetFilter -> setFilter(intent.filter)
             is GalleryIntent.Open -> open(intent.id)
             GalleryIntent.Close -> close()
             is GalleryIntent.Delete -> delete(intent.id)
             GalleryIntent.SaveToGallery -> save()
             is GalleryIntent.Share -> share(intent.chooserTitle)
             is GalleryIntent.StoragePermissionResult -> permissionResult(intent.granted)
+            GalleryIntent.LoadMore -> loadMore()
         }
+    }
+
+    private fun setFilter(next: GalleryFilter) {
+        if (next == filter.value) return
+        // A new filter is a different list: start again from its first page.
+        limit.value = PAGE_SIZE
+        filter.value = next
+    }
+
+    private fun loadMore() {
+        val state = uiState.value
+        // Only grow from the window that is actually on screen, so a burst of requests (or one
+        // made while the previous page is still loading) adds exactly one page.
+        if (!state.loaded || state.endReached || state.isLoadingMore) return
+        if (state.filter != filter.value) return
+        limit.value += PAGE_SIZE
     }
 
     private fun open(id: String) {
@@ -180,7 +235,9 @@ class GalleryViewModel @Inject constructor(
         viewModelScope.launch { repository.delete(item) }
     }
 
-    private companion object {
-        const val STOP_TIMEOUT_MILLIS = 5_000L
+    companion object {
+        /** Items per page. Enough to fill a tall tablet screen twice over in two columns. */
+        const val PAGE_SIZE: Int = 40
+        private const val STOP_TIMEOUT_MILLIS = 5_000L
     }
 }

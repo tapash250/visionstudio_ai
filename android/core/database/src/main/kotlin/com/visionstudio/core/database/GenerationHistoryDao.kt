@@ -8,14 +8,19 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface GenerationHistoryDao {
 
-    @Query("SELECT * FROM generation_history ORDER BY created_at DESC")
-    fun observeAll(): Flow<List<GenerationHistoryEntity>>
+    /**
+     * The newest [limit] rows, newest first. `id` breaks ties between rows created in the same
+     * millisecond, so the order is total and a growing [limit] never reorders rows already shown.
+     */
+    @Query("SELECT * FROM generation_history ORDER BY created_at DESC, id DESC LIMIT :limit")
+    fun observeNewest(limit: Int): Flow<List<GenerationHistoryEntity>>
+
+    /** As [observeNewest], restricted to one media type. */
+    @Query("SELECT * FROM generation_history WHERE media_type = :mediaType ORDER BY created_at DESC, id DESC LIMIT :limit")
+    fun observeNewestOfType(mediaType: String, limit: Int): Flow<List<GenerationHistoryEntity>>
 
     @Query("SELECT * FROM generation_history WHERE slot = :slot ORDER BY created_at DESC LIMIT :limit")
     fun observeRecent(slot: String, limit: Int): Flow<List<GenerationHistoryEntity>>
-
-    @Query("SELECT * FROM generation_history WHERE media_type = :mediaType ORDER BY created_at DESC")
-    fun observeByMediaType(mediaType: String): Flow<List<GenerationHistoryEntity>>
 
     @Query("SELECT * FROM generation_history WHERE id = :id")
     suspend fun get(id: String): GenerationHistoryEntity?
@@ -35,6 +40,10 @@ interface GenerationHistoryDao {
     @Query("DELETE FROM generation_history WHERE id = :id")
     suspend fun delete(id: String): Int
 
-    @Query("SELECT COUNT(*) FROM generation_history")
-    fun observeCount(): Flow<Int>
+    /** How many rows exist per media type. Types with no rows are absent. */
+    @Query("SELECT media_type AS mediaType, COUNT(*) AS count FROM generation_history GROUP BY media_type")
+    fun observeCountsByType(): Flow<List<MediaTypeCount>>
 }
+
+/** One row of [GenerationHistoryDao.observeCountsByType]. */
+data class MediaTypeCount(val mediaType: String, val count: Int)

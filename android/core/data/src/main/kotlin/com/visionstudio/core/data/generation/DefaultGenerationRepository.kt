@@ -26,6 +26,7 @@ import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -113,8 +114,23 @@ internal class DefaultGenerationRepository @Inject constructor(
     override fun observeRecent(slot: EngineSlot, limit: Int): Flow<List<MediaItem>> =
         dao.observeRecent(slot.name, limit).map { rows -> rows.map { it.toMediaItem() } }.flowOn(default)
 
-    override fun observeAll(): Flow<List<MediaItem>> =
-        dao.observeAll().map { rows -> rows.map { it.toMediaItem() } }.flowOn(default)
+    override fun observeLibrary(type: MediaType?, limit: Int): Flow<List<MediaItem>> {
+        require(limit > 0) { "limit must be positive" }
+        val rows = if (type == null) dao.observeNewest(limit) else dao.observeNewestOfType(type.name, limit)
+        return rows.map { page -> page.map { it.toMediaItem() } }.flowOn(default)
+    }
+
+    override fun observeCounts(): Flow<MediaCounts> =
+        dao.observeCountsByType()
+            .map { rows ->
+                val byType = rows.associate { it.mediaType to it.count }
+                MediaCounts(images = byType[MediaType.IMAGE.name] ?: 0, videos = byType[MediaType.VIDEO.name] ?: 0)
+            }
+            .distinctUntilChanged()
+            .flowOn(default)
+
+    override fun observeItem(id: String): Flow<MediaItem?> =
+        dao.observe(id).map { it?.toMediaItem() }.distinctUntilChanged().flowOn(default)
 
     override suspend fun delete(item: MediaItem) {
         dao.delete(item.id)

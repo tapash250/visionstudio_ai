@@ -11,6 +11,7 @@
     <string name="day_today">Today</string>
     <string name="day_yesterday">Yesterday</string>
     <string name="day_items">%1$d</string>
+    <string name="vault_loading_more">Loading more of your Vault</string>
 
     <string name="vault_empty_title">Nothing here yet</string>
     <string name="vault_empty_body">Everything you create in Imagine, Edit and Motion is kept here, along with the exact settings that made it.</string>

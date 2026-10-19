@@ -9,6 +9,7 @@ import com.visionstudio.core.common.error.VisionStudioException
 import com.visionstudio.core.common.result.Result
 import com.visionstudio.core.data.generation.GenerationEvent
 import com.visionstudio.core.data.generation.GenerationRepository
+import com.visionstudio.core.data.generation.MediaCounts
 import com.visionstudio.core.data.media.MediaInspector
 import com.visionstudio.core.data.media.SourceImageLoader
 import com.visionstudio.core.model.AspectRatio
@@ -16,6 +17,7 @@ import com.visionstudio.core.model.EngineConfig
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.model.GenerationParameters
 import com.visionstudio.core.model.MediaItem
+import com.visionstudio.core.model.MediaType
 import com.visionstudio.core.model.ProviderProtocol
 import com.visionstudio.core.network.engine.BinaryPayload
 import com.visionstudio.core.security.KeystoreRecovery
@@ -297,7 +299,9 @@ class EditViewModelTest {
         }
 
         override fun observeRecent(slot: EngineSlot, limit: Int): Flow<List<MediaItem>> = flowOf(emptyList())
-        override fun observeAll(): Flow<List<MediaItem>> = flowOf(emptyList())
+        override fun observeLibrary(type: MediaType?, limit: Int): Flow<List<MediaItem>> = flowOf(emptyList())
+        override fun observeCounts(): Flow<MediaCounts> = flowOf(MediaCounts())
+        override fun observeItem(id: String): Flow<MediaItem?> = flowOf(null)
         override suspend fun delete(item: MediaItem) = Unit
     }
 
