@@ -507,11 +507,16 @@ class McpClientTest {
 
         val call = async { runCatching { client.callTool("generate_image", JsonObject(emptyMap())) } }
         eventually { server.requestsFor("tools/call").isNotEmpty() }
-        server.push("data: " + "A".repeat(4_096)) // no newline ever arrives
+        // No newline ever arrives. The line is larger than the channel's buffer, so the write can
+        // block until the client reads, and once the client hits its limit it cancels the stream
+        // and the pending write fails. It runs on its own coroutine so neither outcome can hold up
+        // or fail the test; only the client's verdict is asserted.
+        val writer = launch(Dispatchers.IO) { runCatching { server.push("data: " + "A".repeat(8 * 1024)) } }
 
         val failure = call.await().exceptionOrNull()
         assertTrue("expected ProtocolException, got $failure", failure is VisionStudioException.ProtocolException)
         assertTrue(client.state.value is McpClient.State.Failed)
+        writer.join()
     }
 
     @Test

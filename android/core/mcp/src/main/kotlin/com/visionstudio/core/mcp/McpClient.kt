@@ -259,16 +259,23 @@ class McpClient internal constructor(
                 val parser = SseEventParser(maxDataChars = config.maxEventBytes)
                 // One line may hold a whole event (a base64 image in one `data:` field), plus its field name.
                 val lines = SseLineReader(channel, maxLineBytes = config.maxEventBytes + SSE_FIELD_OVERHEAD)
-                while (true) {
-                    val line = lines.readLine() ?: break
-                    parser.feedLine(line)?.let { handleEvent(it) }
+                try {
+                    while (true) {
+                        val line = lines.readLine() ?: break
+                        parser.feedLine(line)?.let { handleEvent(it) }
+                    }
+                } catch (oversized: SseEventTooLargeException) {
+                    // Fail callers now: leaving execute {} first means waiting on the engine to
+                    // tear the response down, which a stalled server can drag out.
+                    failInFlight(oversizedFrame(oversized))
+                    throw oversized
                 }
             }
             failInFlight(VisionStudioException.NetworkException("MCP event stream closed by server"))
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (oversized: SseEventTooLargeException) {
-            failInFlight(oversizedFrame(oversized))
+            failInFlight(oversizedFrame(oversized)) // already reported in the read loop; repeating it is a no-op
         } catch (failure: Throwable) {
             failInFlight(failure.toVisionStudioException())
         }
