@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_eyebrow">VisionStudio · Engines</string>
+    <string name="settings_title">Engine\nRoom</string>
+    <string name="settings_subtitle">Wire each studio to any REST or MCP provider. Keys never leave the hardware Keystore.</string>
+
+    <string name="slot_t2i">Imagine</string>
+    <string name="slot_edit">Edit</string>
+    <string name="slot_video">Motion</string>
+
+    <string name="section_protocol">Protocol</string>
+    <string name="section_dialect">API dialect</string>
+    <string name="section_connection">Connection</string>
+    <string name="section_credentials">Credentials</string>
+    <string name="section_auth">Authorization</string>
+
+    <string name="protocol_rest">REST</string>
+    <string name="protocol_mcp">MCP · SSE</string>
+
+    <string name="dialect_openai">OpenAI</string>
+    <string name="dialect_fal">Fal.ai</string>
+    <string name="dialect_custom">Custom</string>
+
+    <string name="auth_bearer">Bearer</string>
+    <string name="auth_key">Key</string>
+    <string name="auth_header">Header</string>
+    <string name="auth_none">None</string>
+
+    <string name="field_endpoint">Endpoint URL</string>
+    <string name="field_sse_endpoint">SSE endpoint</string>
+    <string name="field_model">Model ID</string>
+    <string name="field_model_optional">Model ID (optional)</string>
+    <string name="field_tool">Tool name</string>
+    <string name="field_header">Header name</string>
+    <string name="field_api_key">API key</string>
+
+    <string name="hint_endpoint_openai">https://api.openai.com/v1</string>
+    <string name="hint_endpoint_fal">https://queue.fal.run</string>
+    <string name="hint_endpoint_custom">https://models.example.com/generate</string>
+    <string name="hint_endpoint_mcp">https://mcp.example.com/sse</string>
+    <string name="hint_model_openai">gpt-image-1</string>
+    <string name="hint_model_fal">fal-ai/flux/dev</string>
+    <string name="hint_model_video_openai">sora-2</string>
+    <string name="hint_model_video_fal">fal-ai/kling-video/v2/master/text-to-video</string>
+    <string name="hint_tool">generate_image</string>
+    <string name="hint_header">x-api-key</string>
+    <string name="hint_api_key">Paste your key</string>
+    <string name="hint_api_key_stored">•••••••• stored securely</string>
+
+    <string name="support_api_key">Encrypted with AES-256-GCM under an Android Keystore key.</string>
+    <string name="support_api_key_stored">A key is saved. Leave empty to keep it, or paste a new one.</string>
+    <string name="support_mcp">Speaks JSON-RPC 2.0 over Server-Sent Events (MCP 2024-11-05).</string>
+
+    <string name="status_unconfigured">Not configured</string>
+    <string name="status_saved">Saved · ready</string>
+    <string name="status_draft">Unsaved changes</string>
+    <string name="status_testing">Probing connection…</string>
+    <string name="status_verified">Verified · %1$d ms</string>
+    <string name="status_failed">Check failed</string>
+
+    <string name="action_test">Test</string>
+    <string name="action_verify_save">Verify &amp; Save</string>
+    <string name="action_verifying">Verifying…</string>
+    <string name="action_saving">Saving…</string>
+    <string name="action_save_anyway">Save without verifying</string>
+    <string name="action_dismiss">Dismiss</string>
+
+    <string name="saved_toast">%1$s engine saved</string>
+    <string name="recovery_title">Secure storage was reset</string>
+    <string name="recovery_body">The Keystore could not decrypt saved credentials, so they were wiped safely. Re-enter your API keys.</string>
+    <string name="latency_ms">%1$d ms</string>
+</resources>

@@ -1,0 +1,48 @@
+# Hand-written baseline profile for VisionStudio AI.
+#
+# Compose runtime/ui/foundation, Navigation, Lifecycle and Coil ship their own profiles inside
+# their AARs, and AGP merges them at build time. This file therefore only covers our own code:
+# the cold-start path (H = hot, S = startup, P = post-startup) and the drawing routines that run
+# every frame. It is a floor; `:app:generateReleaseBaselineProfile` records a measured profile
+# from a device into app/src/release/generated/baselineProfiles/ that is merged on top of this.
+#
+# Rule syntax: [HSP]L<class>;-><method>(<args>)<return>; ** wildcards match any run of characters.
+
+# --- Process and activity startup --------------------------------------------------------------
+HSPLcom/visionstudio/app/VisionStudioApplication;->**(**)**
+HSPLcom/visionstudio/app/MainActivity;->**(**)**
+HSPLcom/visionstudio/app/MainActivityKt;->**(**)**
+HSPLcom/visionstudio/app/navigation/**;->**(**)**
+Lcom/visionstudio/app/**;
+
+# --- Design system: theme, background, bottom bar and the Prism components ---------------------
+HSPLcom/visionstudio/core/designsystem/theme/**;->**(**)**
+HSPLcom/visionstudio/core/designsystem/component/**;->**(**)**
+HSPLcom/visionstudio/core/designsystem/modifier/**;->**(**)**
+Lcom/visionstudio/core/designsystem/**;
+
+# --- Start destination: Generate -----------------------------------------------------------------
+HSPLcom/visionstudio/feature/t2i/**;->**(**)**
+Lcom/visionstudio/feature/t2i/**;
+
+# --- Other tab roots: their first composition happens within a tap of startup -------------------
+HSPLcom/visionstudio/feature/settings/**;->**(**)**
+Lcom/visionstudio/feature/settings/**;
+HSPLcom/visionstudio/feature/video/**;->**(**)**
+Lcom/visionstudio/feature/video/**;
+HSPLcom/visionstudio/feature/gallery/**;->**(**)**
+Lcom/visionstudio/feature/gallery/**;
+
+# --- Edit studio: mask canvas, stroke ink and compare slider run on every touch / frame ---------
+HSPLcom/visionstudio/feature/imageedit/**;->**(**)**
+Lcom/visionstudio/feature/imageedit/**;
+
+# --- Shared core code the first screens touch (settings load, key store, job and media access) -
+HSPLcom/visionstudio/core/common/**;->**(**)**
+Lcom/visionstudio/core/common/**;
+HSPLcom/visionstudio/core/model/**;->**(**)**
+Lcom/visionstudio/core/model/**;
+HSPLcom/visionstudio/core/data/**;->**(**)**
+Lcom/visionstudio/core/data/**;
+HSPLcom/visionstudio/core/security/**;->**(**)**
+Lcom/visionstudio/core/security/**;

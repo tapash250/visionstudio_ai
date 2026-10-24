@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  API 31+: Keystore keys never leave the device, so restoring the encrypted credential file
+  elsewhere would only produce undecryptable ciphertext. Exclude it from both channels.
+  File name must match KeystoreEncryptedPreferencesFactory.PREFERENCES_FILE.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="visionstudio_secure_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="visionstudio_secure_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>
