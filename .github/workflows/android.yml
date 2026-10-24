@@ -1,0 +1,58 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+
+# A newer push to the same branch or PR supersedes the run in progress.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android Unit Tests & Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      # Caches the Gradle distribution and dependencies, and validates gradle-wrapper.jar's checksum.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # :core:model is a plain JVM module with no debug/release variants, so the variant test
+      # tasks skip it; its tests run through `test`.
+      - name: Unit tests (debug and release) and lint
+        run: ./gradlew testDebugUnitTest testReleaseUnitTest :core:model:test lint --continue
+
+      - name: Upload test and lint reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-reports
+          path: |
+            android/**/build/reports/tests/
+            android/**/build/reports/lint-results-*.html
+            android/**/build/test-results/
+          retention-days: 7
