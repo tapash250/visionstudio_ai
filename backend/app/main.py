@@ -60,7 +60,9 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 async def add_process_time_header(request: Request, call_next):
     start = time.time()
 
-    client_id = request.headers.get("x-device-id") or request.client.host
+    # request.client is None when the peer address is unknown (Unix sockets, some proxies, tests).
+    client_host = request.client.host if request.client else "unknown"
+    client_id = request.headers.get("x-device-id") or client_host
     if not await rate_limiter.check(client_id, request.url.path):
         return JSONResponse(
             status_code=429,

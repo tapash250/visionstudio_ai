@@ -52,7 +52,10 @@ class Project(Base):
     is_mature = Column(Boolean, default=False)
     is_encrypted = Column(Boolean, default=False)
 
-    metadata = Column(JSON, default=dict)
+    # "metadata" is reserved on declarative classes (it holds the table MetaData), so the
+    # attribute is metadata_ while the column keeps its existing name. API payloads still use
+    # the "metadata" key; see routers/projects.py.
+    metadata_ = Column("metadata", JSON, default=dict)
     tags = Column(ARRAY(String), default=list)
 
     created_at = Column(DateTime, default=datetime.utcnow)

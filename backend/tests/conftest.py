@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -43,6 +45,18 @@ def client(db_session):
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+@pytest.fixture
+def api_client():
+    """In-process client for tests that mock their own dependencies.
+
+    Used as a context manager so every request in a test shares one event loop (the app's
+    Redis connection pool is bound to the loop it was first used on) and the app's lifespan
+    runs. A fresh device id gives each test its own rate-limit bucket, so reruns within the
+    limiter's 60-second window can't trip the limit.
+    """
+    with TestClient(app, headers={"x-device-id": f"pytest-{uuid.uuid4()}"}) as test_client:
+        yield test_client
 
 @pytest.fixture
 def mock_user():

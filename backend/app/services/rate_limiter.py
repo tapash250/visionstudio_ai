@@ -17,7 +17,11 @@ class RateLimiter:
             limit = self.default_limit
             window = 60
 
-        key = f"rate_limit:{client_id}:{path.split('/')[2]}"
+        # Bucket by the segment after /api (e.g. "generate" for /api/generate/...). Short paths
+        # such as /health have no such segment and share the first one (or "root").
+        segments = [part for part in path.split("/") if part]
+        bucket = segments[1] if len(segments) > 1 and segments[0] == "api" else (segments[0] if segments else "root")
+        key = f"rate_limit:{client_id}:{bucket}"
         now = time.time()
 
         # Clean old entries and count current
