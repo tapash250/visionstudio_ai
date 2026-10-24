@@ -11,3 +11,6 @@ captures/
 *.aab
 *.jks
 *.keystore
+
+# Request log written by scripts/mock_provider.py
+mock_provider.log.jsonl
