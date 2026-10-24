@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, BellOff, Check, Loader2 } from 'lucide-react';
-import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { Bell, BellOff, Loader2 } from 'lucide-react';
+
 import { toast } from '@/components/Toast';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export function PushSubscription() {
   const { supported, subscribed, loading, subscribe, unsubscribe } = usePushNotifications();
@@ -92,7 +94,7 @@ export function PushSubscription() {
             >
               <h3 className="mb-2 text-lg font-bold">Disable Notifications?</h3>
               <p className="mb-4 text-sm text-muted-foreground">
-                You won't receive alerts when your AI creations are ready.
+                You won&apos;t receive alerts when your AI creations are ready.
               </p>
               <div className="flex gap-2">
                 <button

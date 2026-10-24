@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+
 import { motion } from 'framer-motion';
 import { Shield, Lock, Eye, EyeOff, AlertTriangle, Check } from 'lucide-react';
-import { useAuthStore } from '@/stores/authStore';
 import Link from 'next/link';
+
+import { useAuthStore } from '@/stores/authStore';
 
 export default function MaturePage() {
   const { matureMode, setMatureMode, maturePin, setMaturePin } = useAuthStore();

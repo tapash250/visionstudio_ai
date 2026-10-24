@@ -90,7 +90,8 @@ export function usePushNotifications() {
   return { ...state, subscribe, unsubscribe };
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+// Always backed by a plain ArrayBuffer (never shared), which is what PushManager.subscribe requires.
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
   const rawData = window.atob(base64);

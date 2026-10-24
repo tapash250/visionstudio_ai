@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+
 import { generationApi } from '@/lib/api';
-import { useGenerationStore } from '@/stores/generationStore';
 import { generateSeed } from '@/lib/utils';
+import { useGenerationStore } from '@/stores/generationStore';
 
 export function useImageGeneration() {
   const store = useGenerationStore();

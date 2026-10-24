@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+
 import { cn } from '@/lib/utils';
 
 interface StyleCardProps {
@@ -12,7 +13,7 @@ interface StyleCardProps {
   isMature?: boolean;
 }
 
-export function StyleCard({ id, label, color, isSelected, onClick, isMature }: StyleCardProps) {
+export function StyleCard({ label, color, isSelected, onClick, isMature }: StyleCardProps) {
   return (
     <motion.button
       whileTap={{ scale: 0.95 }}

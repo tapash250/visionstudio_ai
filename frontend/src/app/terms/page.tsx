@@ -28,7 +28,7 @@ export default function TermsPage() {
         </section>
         <section>
           <h2 className="mb-2 text-lg font-semibold text-foreground">5. Service Availability</h2>
-          <p>VisionStudio AI is provided "as is" without warranties. We reserve the right to modify or discontinue services.</p>
+          <p>VisionStudio AI is provided &quot;as is&quot; without warranties. We reserve the right to modify or discontinue services.</p>
         </section>
       </div>
     </div>

@@ -1,6 +1,8 @@
-import Link from 'next/link';
+'use client';
+
 import { motion } from 'framer-motion';
 import { Sparkles, Wand2, Film, ArrowRight, Star, Shield, Zap, Smartphone } from 'lucide-react';
+import Link from 'next/link';
 
 const features = [
   {

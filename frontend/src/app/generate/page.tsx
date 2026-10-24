@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Wand2, RefreshCw, Download, ImageIcon, Settings2, X, ChevronDown } from 'lucide-react';
-import { useGenerationStore } from '@/stores/generationStore';
+import { Sparkles, Wand2, RefreshCw, Download, Settings2, X, ChevronDown } from 'lucide-react';
+
 import { useImageGeneration } from '@/hooks/useImageGeneration';
 import { getAspectRatioClass, generateSeed } from '@/lib/utils';
+import { useGenerationStore } from '@/stores/generationStore';
 import type { AspectRatio } from '@/types';
 
 const aspectRatios: { value: AspectRatio; label: string; icon: string }[] = [

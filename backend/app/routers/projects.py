@@ -67,7 +67,7 @@ async def get_project(
         "status": project.status,
         "isPublic": project.is_public,
         "isMature": project.is_mature,
-        "metadata": project.metadata,
+        "metadata": project.metadata_,
         "tags": project.tags,
         "createdAt": project.created_at.isoformat(),
         "updatedAt": project.updated_at.isoformat(),

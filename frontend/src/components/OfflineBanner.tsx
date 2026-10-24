@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff, Wifi } from 'lucide-react';
 
@@ -30,7 +31,7 @@ export function OfflineBanner() {
         >
           <div className="flex items-center gap-2 rounded-xl bg-amber-500/90 px-4 py-3 text-sm font-medium text-white shadow-lg backdrop-blur">
             <WifiOff className="h-4 w-4" />
-            <span>You're offline. Changes will sync when you reconnect.</span>
+            <span>You&apos;re offline. Changes will sync when you reconnect.</span>
           </div>
         </motion.div>
       )}

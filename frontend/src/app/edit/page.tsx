@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Wand2, Download, Undo, Redo, Eraser, Paintbrush, Scissors, Sun, Eye, Shirt, Palette, Sparkles, X, ChevronRight } from 'lucide-react';
+
+import { Upload, Wand2, Undo, Redo, Eraser, Paintbrush, Scissors, Sun, Eye, Shirt, Palette, Sparkles, X } from 'lucide-react';
+
 import { editApi } from '@/lib/api';
 
 interface EditTool {
@@ -61,8 +62,7 @@ export default function EditPage() {
 
     // Upload to server
     try {
-      const res = await editApi.upload(file);
-      // Store server URL if needed
+      await editApi.upload(file);
     } catch (err) {
       console.error('Upload failed', err);
     }

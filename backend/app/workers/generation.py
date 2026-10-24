@@ -67,7 +67,3 @@ def get_width(ratio: str) -> int:
 def get_height(ratio: str) -> int:
     map = {"1:1": 1024, "16:9": 576, "9:16": 1024, "4:5": 1040, "3:2": 680}
     return map.get(ratio, 1024)
- 1024, "16:9": 576, "9:16": 1024, "4:5": 1040, "3:2": 680}
-    return map.get(ratio, 1024)
-
-from datetime import datetime

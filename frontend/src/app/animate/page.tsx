@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useRef } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, Film, Play, Download, Clock, Gauge, Volume2, X, ChevronRight } from 'lucide-react';
+import { Film, Play, Clock, Gauge, X } from 'lucide-react';
+
 import { animationApi } from '@/lib/api';
 
 const animationTypes = [
