@@ -1,5 +1,8 @@
-import { cn } from '@/lib/utils';
+'use client';
+
 import { createContext, useContext, useState } from 'react';
+
+import { cn } from '@/lib/utils';
 
 interface TabsContextValue {
   value: string;

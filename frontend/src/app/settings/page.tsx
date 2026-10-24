@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+
 import { motion } from 'framer-motion';
 import { 
   User, Bell, Shield, Moon, Sun, Smartphone, 
@@ -8,6 +9,7 @@ import {
   Fingerprint, Globe, Zap
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
+
 import { useAuthStore } from '@/stores/authStore';
 
 interface SettingSection {

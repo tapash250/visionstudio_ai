@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Link2, Twitter, Facebook, Linkedin, Mail, Check } from 'lucide-react';
+
 import { toast } from '@/components/Toast';
 
 interface ShareModalProps {

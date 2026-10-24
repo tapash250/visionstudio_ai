@@ -1,12 +1,12 @@
 'use client';
 
+import { useState } from 'react';
+
+import { motion, AnimatePresence } from 'framer-motion';
+import { User, Zap } from 'lucide-react';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, User, Zap } from 'lucide-react';
-import { useState } from 'react';
-import { cn } from '@/lib/utils';
 
 const pageTitles: Record<string, string> = {
   '/generate': 'Generate',

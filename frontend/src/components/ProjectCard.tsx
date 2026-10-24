@@ -1,15 +1,19 @@
 'use client';
 
-import { motion } from 'framer-motion';
-import { ImageIcon, Wand2, Film, Lock, Globe, MoreVertical, Trash2 } from 'lucide-react';
 import { useState } from 'react';
+
+import { motion } from 'framer-motion';
+import { ImageIcon, Wand2, Film, Grid3X3, Lock, Globe, MoreVertical, Trash2, type LucideIcon } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import type { Project } from '@/types';
 
-const typeIcons = {
+// Typed against Project['type'] so adding a project type without an icon fails to compile.
+const typeIcons: Record<Project['type'], LucideIcon> = {
   GENERATION: ImageIcon,
   EDIT: Wand2,
   ANIMATION: Film,
+  BATCH: Grid3X3,
 };
 
 const statusColors: Record<string, string> = {

@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+
 import './globals.css';
-import { Providers } from '@/components/Providers';
 import { BottomNav } from '@/components/BottomNav';
-import { TopBar } from '@/components/TopBar';
 import { InstallPrompt } from '@/components/InstallPrompt';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { Providers } from '@/components/Providers';
 import { ToastContainer } from '@/components/Toast';
+import { TopBar } from '@/components/TopBar';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 

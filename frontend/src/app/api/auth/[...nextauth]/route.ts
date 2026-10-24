@@ -1,13 +1,13 @@
-import NextAuth from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import CredentialsProvider from 'next-auth/providers/credentials';
-import GoogleProvider from 'next-auth/providers/google';
-import GitHubProvider from 'next-auth/providers/github';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { z } from 'zod';
-import type { JWT } from 'next-auth/jwt';
+import NextAuth from 'next-auth';
 import type { User, Account, SessionStrategy } from 'next-auth';
+import type { JWT } from 'next-auth/jwt';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import GitHubProvider from 'next-auth/providers/github';
+import GoogleProvider from 'next-auth/providers/google';
+import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
@@ -80,7 +80,7 @@ const authOptions = {
     },
   },
   events: {
-    async signIn({ user, account }: { user: User; account?: Account | null; profile?: any; isNewUser?: boolean }) {
+    async signIn({ user }: { user: User; account?: Account | null; profile?: any; isNewUser?: boolean }) {
       // Track device on sign in
       if (user?.id) {
         // Device tracking logic

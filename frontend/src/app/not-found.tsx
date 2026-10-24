@@ -1,6 +1,8 @@
-import Link from 'next/link';
+'use client';
+
 import { motion } from 'framer-motion';
 import { Compass, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function NotFound() {
   return (
@@ -14,7 +16,7 @@ export default function NotFound() {
       </motion.div>
       <h1 className="mb-2 text-4xl font-bold">404</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        This page doesn't exist or has been moved.
+        This page doesn&apos;t exist or has been moved.
       </p>
       <Link href="/" className="btn-primary gap-2">
         <ArrowLeft className="h-4 w-4" />

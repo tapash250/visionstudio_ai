@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GenerationJob, StylePreset, AspectRatio } from '@/types';
+
+import type { GenerationJob, AspectRatio } from '@/types';
 
 interface GenerationState {
   // Input

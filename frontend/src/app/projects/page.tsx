@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
 import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, ImageIcon, Film, Wand2, Trash2, Lock, Globe, MoreVertical, Search, Filter, Grid3X3, List } from 'lucide-react';
-import { useProjectStore } from '@/stores/projectStore';
+import { FolderOpen, ImageIcon, Film, Wand2, Trash2, Lock, Globe, MoreVertical, Search, Grid3X3, List } from 'lucide-react';
+
 import { projectApi } from '@/lib/api';
-import type { Project } from '@/types';
+import { useProjectStore } from '@/stores/projectStore';
 
 const typeIcons = {
   GENERATION: ImageIcon,
@@ -26,7 +27,6 @@ export default function ProjectsPage() {
   const { projects, setProjects, deleteProject, filter, setFilter, isLoading, setLoading } = useProjectStore();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [showMenu, setShowMenu] = useState<string | null>(null);
 
   useEffect(() => {
