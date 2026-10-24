@@ -56,7 +56,7 @@ jobs:
           cache: 'pip'
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
-      - run: pip install pytest pytest-asyncio httpx
+      - run: pip install pytest pytest-asyncio httpx pytest-cov
       - run: pytest --cov=app --cov-report=xml
         env:
           DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test

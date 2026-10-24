@@ -36,7 +36,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # The runner image ships the Android SDK (ANDROID_HOME). Use its own sdkmanager to accept the
+      # licenses and install exactly what this build compiles against.
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          (yes || true) | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
 
       # Caches the Gradle distribution and dependencies, and validates gradle-wrapper.jar's checksum.
       - uses: gradle/actions/setup-gradle@v4
