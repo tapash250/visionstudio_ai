@@ -1,0 +1,31 @@
+# The Dockerfile copies this whole directory (COPY . .), so anything here ends up in the image's
+# build stage. Dependencies and the build are recreated in the image by npm ci and next build.
+.git
+**/.git
+android/
+
+# Dependencies and build output
+node_modules
+.next
+out
+dist
+storybook-static
+*.tsbuildinfo
+
+# Tests and coverage
+coverage
+.nyc_output
+playwright-report
+test-results
+
+# Local secrets: never bake them into an image. Runtime values come from the environment.
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Editor and OS files, logs
+.vscode
+.idea
+.DS_Store
+*.log

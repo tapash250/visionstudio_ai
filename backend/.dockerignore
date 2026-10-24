@@ -1,0 +1,29 @@
+# The Dockerfile copies only requirements.txt, app/, alembic/ and alembic.ini; this keeps the
+# rest of the directory out of the build context.
+.git
+**/.git
+android/
+
+# Python caches and virtualenvs
+**/__pycache__
+**/*.py[cod]
+.venv
+venv
+*.egg-info
+
+# Tests and coverage
+.pytest_cache
+.coverage
+coverage.xml
+htmlcov
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Editor and OS files, logs
+.vscode
+.idea
+.DS_Store
+*.log
