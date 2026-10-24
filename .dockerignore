@@ -1,0 +1,19 @@
+# Applies only to builds whose context is the repository root. The service images build from
+# frontend/, backend/ and gpu-worker/ (each with its own .dockerignore), so nothing uses the
+# root context today; this keeps the history and the Android project out if one ever does.
+.git
+android/
+**/node_modules
+**/.next
+**/build
+**/dist
+**/__pycache__
+**/.pytest_cache
+**/.gradle
+**/.kotlin
+.env
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.local.example
+*.log
