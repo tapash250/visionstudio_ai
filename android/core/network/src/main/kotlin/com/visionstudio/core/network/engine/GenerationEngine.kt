@@ -73,7 +73,8 @@ data class EngineRequest(
 )
 
 sealed interface Submission {
-    data class Completed(val outputs: List<EngineOutput>) : Submission
+    /** [reportedSeed] is the seed the provider says it used, when it reports one. */
+    data class Completed(val outputs: List<EngineOutput>, val reportedSeed: Long? = null) : Submission
     data class Queued(val job: RemoteJob) : Submission
 }
 

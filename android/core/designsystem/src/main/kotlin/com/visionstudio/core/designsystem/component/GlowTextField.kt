@@ -59,6 +59,11 @@ import com.visionstudio.core.designsystem.theme.VisionStudioTheme
  * Frosted input that lights up with an indigo→cyan glow on focus (rose on error).
  * [mono] switches to JetBrains Mono for URLs and IDs. [secret] masks the value, with an
  * eye toggle to reveal it.
+ *
+ * [wrap] lets a long value (a URL or a model ID) wrap onto up to [MAX_WRAPPED_LINES] lines, so
+ * the whole value stays readable. A single-line field scrolls horizontally instead, which hides
+ * the start of a value wider than the field (for example `black-forest-labs/…` showing as
+ * `lack-forest-labs/…`). Line breaks are never accepted into a wrapped value.
  */
 @Composable
 fun GlowTextField(
@@ -71,6 +76,7 @@ fun GlowTextField(
     isError: Boolean = false,
     mono: Boolean = false,
     secret: Boolean = false,
+    wrap: Boolean = false,
     leadingIcon: ImageVector? = null,
     enabled: Boolean = true,
     keyboardType: KeyboardType = KeyboardType.Text,
@@ -102,11 +108,13 @@ fun GlowTextField(
             color = if (isError) StudioError else StudioTextSecondary,
             modifier = Modifier.padding(start = 4.dp),
         )
+        val wraps = wrap && !secret
         BasicTextField(
             value = value,
-            onValueChange = onValueChange,
+            onValueChange = if (wraps) { next -> onValueChange(next.replace(LINE_BREAKS, "")) } else onValueChange,
             enabled = enabled,
-            singleLine = true,
+            singleLine = !wraps,
+            maxLines = if (wraps) MAX_WRAPPED_LINES else 1,
             textStyle = textStyle,
             cursorBrush = SolidColor(StudioCyan),
             interactionSource = interactionSource,
@@ -171,3 +179,6 @@ fun GlowTextField(
         }
     }
 }
+
+private const val MAX_WRAPPED_LINES = 3
+private val LINE_BREAKS = Regex("[\r\n]")

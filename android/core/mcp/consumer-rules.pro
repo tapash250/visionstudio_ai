@@ -1,5 +1,6 @@
-# Ktor CIO resolves engine containers and coroutine debug hooks reflectively.
--keep class io.ktor.client.engine.cio.CIOEngineContainer { *; }
+# Ktor resolves engine containers and coroutine debug hooks reflectively. The MCP client passes
+# the OkHttp engine explicitly, but keep its container for ServiceLoader-based lookups too.
+-keep class io.ktor.client.engine.okhttp.OkHttpEngineContainer { *; }
 -keepclassmembers class io.ktor.** { volatile <fields>; }
 -dontwarn org.slf4j.**
 -dontwarn java.lang.management.**

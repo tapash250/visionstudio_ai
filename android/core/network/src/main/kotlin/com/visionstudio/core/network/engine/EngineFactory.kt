@@ -54,7 +54,7 @@ class EngineFactory @Inject constructor(
                 apiKey = apiKey,
                 client = mcpClientFactory.create(
                     McpServerConfig(
-                        sseUrl = config.endpointUrl,
+                        url = config.endpointUrl,
                         headers = config.authHeaders(apiKey),
                         requestTimeoutMillis = config.requestTimeoutSeconds * MILLIS_PER_SECOND,
                     ),

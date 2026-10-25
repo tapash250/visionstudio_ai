@@ -66,12 +66,17 @@ internal class DefaultGenerationRepository @Inject constructor(
                 is Submission.Completed -> submission.outputs
                 is Submission.Queued -> pollUntilDone(engine, submission.job, engine.config.requestTimeoutSeconds)
             }
+            // A randomised seed is only known from the provider's answer; keep it so the Vault can re-run it.
+            val recorded = (submission as? Submission.Completed)?.reportedSeed
+                ?.takeIf { parameters.seed == null }
+                ?.let { parameters.copy(seed = it) }
+                ?: parameters
             if (outputs.isEmpty()) throw VisionStudioException.ProtocolException(null, "Provider returned no media")
 
             send(GenerationEvent.Progress(fraction = 1f, message = "Saving"))
             val createdAt = System.currentTimeMillis()
             val items = outputs.take(MAX_OUTPUTS_PER_TASK).mapIndexed { index, output ->
-                sink.store(engine, output, slot, taskId, parameters, createdAt + index)
+                sink.store(engine, output, slot, taskId, recorded, createdAt + index)
             }
             send(GenerationEvent.Completed(items))
         } finally {

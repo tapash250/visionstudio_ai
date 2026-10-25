@@ -19,7 +19,14 @@ object McpMethods {
     const val CANCELLED: String = "notifications/cancelled"
 }
 
+/** Revision spoken over the legacy HTTP+SSE transport. */
 const val MCP_PROTOCOL_VERSION: String = "2024-11-05"
+
+/** Revision requested over Streamable HTTP. */
+const val MCP_LATEST_PROTOCOL_VERSION: String = "2025-06-18"
+
+/** Revisions this client can speak; a server answering `initialize` with another is refused. */
+val MCP_SUPPORTED_PROTOCOL_VERSIONS: Set<String> = setOf(MCP_LATEST_PROTOCOL_VERSION, "2025-03-26", MCP_PROTOCOL_VERSION)
 
 @Serializable
 data class Implementation(val name: String, val version: String)
