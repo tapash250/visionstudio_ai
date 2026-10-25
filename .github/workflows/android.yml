@@ -81,12 +81,14 @@ jobs:
     env:
       APK_DIR: app/build/outputs/apk/release
       APK_NAME: visionstudio-release.apk
-      # Read by app/build.gradle.kts. Every build is signed with this one key, so each APK installs
-      # over the previous one (adb install -r) without losing app data.
+      # Read by app/build.gradle.kts, together with the password and alias variables that the
+      # restore step exports. Every build is signed with this one key, so each APK installs over
+      # the previous one (adb install -r) without losing app data.
       VISIONSTUDIO_KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
-      VISIONSTUDIO_KEYSTORE_PASSWORD: ${{ secrets.VISIONSTUDIO_KEYSTORE_PASSWORD }}
-      VISIONSTUDIO_KEY_ALIAS: ${{ secrets.VISIONSTUDIO_KEY_ALIAS }}
-      VISIONSTUDIO_KEY_PASSWORD: ${{ secrets.VISIONSTUDIO_KEY_PASSWORD }}
+      # SHA-256 of the release signing certificate. Phones only accept an update signed with the
+      # key they already have, so a build signed with anything else fails here instead of being
+      # published. Change this only when deliberately moving to a new key (users must reinstall).
+      EXPECTED_SIGNER_SHA256: b310c4506541ab493d0189a67b93c3c0f52bc733df5ffb00d146cb52054986c9
     steps:
       - uses: actions/checkout@v4
 
@@ -106,18 +108,57 @@ jobs:
       # Never fall back to a runner's throwaway debug key: an APK signed with it can't be
       # installed over the previous build.
       - name: Restore the release keystore
+        # The raw secrets are visible to this step only; it exports cleaned copies for the rest.
         env:
-          VISIONSTUDIO_KEYSTORE_BASE64: ${{ secrets.VISIONSTUDIO_KEYSTORE_BASE64 }}
+          RAW_VISIONSTUDIO_KEYSTORE_BASE64: ${{ secrets.VISIONSTUDIO_KEYSTORE_BASE64 }}
+          RAW_VISIONSTUDIO_KEYSTORE_PASSWORD: ${{ secrets.VISIONSTUDIO_KEYSTORE_PASSWORD }}
+          RAW_VISIONSTUDIO_KEY_ALIAS: ${{ secrets.VISIONSTUDIO_KEY_ALIAS }}
+          RAW_VISIONSTUDIO_KEY_PASSWORD: ${{ secrets.VISIONSTUDIO_KEY_PASSWORD }}
         run: |
           missing=""
           for name in VISIONSTUDIO_KEYSTORE_BASE64 VISIONSTUDIO_KEYSTORE_PASSWORD VISIONSTUDIO_KEY_ALIAS VISIONSTUDIO_KEY_PASSWORD; do
-            [ -n "${!name}" ] || missing="$missing $name"
+            raw="RAW_$name"
+            [ -n "$(printf '%s' "${!raw}" | tr -d '[:space:]')" ] || missing="$missing $name"
           done
           if [ -n "$missing" ]; then
             echo "::error title=Release signing not configured::Missing repository secrets:$missing. See android/README-release-signing.md."
             exit 1
           fi
-          printf '%s' "$VISIONSTUDIO_KEYSTORE_BASE64" | base64 --decode > "$VISIONSTUDIO_KEYSTORE_FILE"
+
+          # Values pasted into the GitHub secret form often pick up line breaks, a trailing
+          # newline or a CR. Base64 ignores all whitespace; the alias and passwords lose only
+          # leading and trailing whitespace, and must then be a single line.
+          trim() { local v="$1"; v="${v#"${v%%[![:space:]]*}"}"; printf '%s' "${v%"${v##*[![:space:]]}"}"; }
+          for name in VISIONSTUDIO_KEYSTORE_PASSWORD VISIONSTUDIO_KEY_ALIAS VISIONSTUDIO_KEY_PASSWORD; do
+            raw="RAW_$name"
+            value=$(trim "${!raw}")
+            if [[ "$value" == *$'\n'* || "$value" == *$'\r'* ]]; then
+              echo "::error title=Invalid $name::The secret spans several lines; it must be a single value."
+              exit 1
+            fi
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+            export "$name=$value"
+          done
+          if ! printf '%s' "$RAW_VISIONSTUDIO_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$VISIONSTUDIO_KEYSTORE_FILE"; then
+            echo "::error title=Invalid VISIONSTUDIO_KEYSTORE_BASE64::The secret is not valid base64. Paste the whole value again (the output of base64 -w 0 visionstudio-release.jks)."
+            exit 1
+          fi
+
+          # Open the keystore now, so a wrong password or alias fails with a clear message
+          # instead of deep inside the Gradle build.
+          if ! keytool -list -keystore "$VISIONSTUDIO_KEYSTORE_FILE" -storepass:env VISIONSTUDIO_KEYSTORE_PASSWORD \
+              -alias "$VISIONSTUDIO_KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error title=Release keystore unusable::Could not open the keystore with VISIONSTUDIO_KEYSTORE_PASSWORD, or it has no key named VISIONSTUDIO_KEY_ALIAS."
+            exit 1
+          fi
+          actual=$(keytool -exportcert -keystore "$VISIONSTUDIO_KEYSTORE_FILE" -alias "$VISIONSTUDIO_KEY_ALIAS" \
+            -storepass:env VISIONSTUDIO_KEYSTORE_PASSWORD | sha256sum | cut -d' ' -f1)
+          if [ "$actual" != "$EXPECTED_SIGNER_SHA256" ]; then
+            echo "::error title=Wrong release key::The keystore's certificate is $actual, not the release key $EXPECTED_SIGNER_SHA256. APKs signed with it could not be installed over existing builds."
+            exit 1
+          fi
+          echo "Release keystore OK: certificate $actual"
 
       - name: Build signed R8 release APK
         run: ./gradlew :app:assembleRelease
@@ -129,10 +170,8 @@ jobs:
           apk="$APK_DIR/app-release.apk"
           "$apksigner" verify --verbose "$apk"
           signed=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
-          expected=$(keytool -exportcert -keystore "$VISIONSTUDIO_KEYSTORE_FILE" -alias "$VISIONSTUDIO_KEY_ALIAS" \
-            -storepass:env VISIONSTUDIO_KEYSTORE_PASSWORD | sha256sum | cut -d' ' -f1)
-          if [ -z "$signed" ] || [ "$signed" != "$expected" ]; then
-            echo "::error::APK signer ($signed) is not the release key ($expected)"
+          if [ -z "$signed" ] || [ "$signed" != "$EXPECTED_SIGNER_SHA256" ]; then
+            echo "::error::APK signer ($signed) is not the release key ($EXPECTED_SIGNER_SHA256)"
             exit 1
           fi
           cp "$apk" "$APK_DIR/$APK_NAME"
