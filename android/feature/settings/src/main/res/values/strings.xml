@@ -15,7 +15,7 @@
     <string name="section_auth">Authorization</string>
 
     <string name="protocol_rest">REST</string>
-    <string name="protocol_mcp">MCP · SSE</string>
+    <string name="protocol_mcp">MCP</string>
 
     <string name="dialect_openai">OpenAI</string>
     <string name="dialect_fal">Fal.ai</string>
@@ -27,7 +27,7 @@
     <string name="auth_none">None</string>
 
     <string name="field_endpoint">Endpoint URL</string>
-    <string name="field_sse_endpoint">SSE endpoint</string>
+    <string name="field_sse_endpoint">MCP endpoint</string>
     <string name="field_model">Model ID</string>
     <string name="field_model_optional">Model ID (optional)</string>
     <string name="field_tool">Tool name</string>
@@ -37,7 +37,7 @@
     <string name="hint_endpoint_openai">https://api.openai.com/v1</string>
     <string name="hint_endpoint_fal">https://queue.fal.run</string>
     <string name="hint_endpoint_custom">https://models.example.com/generate</string>
-    <string name="hint_endpoint_mcp">https://mcp.example.com/sse</string>
+    <string name="hint_endpoint_mcp">https://example.hf.space/gradio_api/mcp/</string>
     <string name="hint_model_openai">gpt-image-1</string>
     <string name="hint_model_fal">fal-ai/flux/dev</string>
     <string name="hint_model_video_openai">sora-2</string>
@@ -49,7 +49,7 @@
 
     <string name="support_api_key">Encrypted with AES-256-GCM under an Android Keystore key.</string>
     <string name="support_api_key_stored">A key is saved. Leave empty to keep it, or paste a new one.</string>
-    <string name="support_mcp">Speaks JSON-RPC 2.0 over Server-Sent Events (MCP 2024-11-05).</string>
+    <string name="support_mcp">JSON-RPC 2.0 over Streamable HTTP (MCP 2025-06-18), falling back to legacy SSE (2024-11-05) automatically.</string>
 
     <string name="status_unconfigured">Not configured</string>
     <string name="status_saved">Saved · ready</string>

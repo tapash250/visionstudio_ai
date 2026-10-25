@@ -53,6 +53,7 @@ class McpGenerationEngine(
     private val toolName: String = config.mcpToolName
         ?: throw VisionStudioException.ValidationException("mcpToolName", "MCP engines need a tool name")
     private val auth = config.authHeaders(apiKey)
+    private val secrets = listOfNotNull(apiKey?.takeIf { it.isNotBlank() })
     private val toolMutex = Mutex()
     private var cachedTool: McpTool? = null
 
@@ -67,21 +68,22 @@ class McpGenerationEngine(
             val (server, tools) = outcome
             val tool = tools.firstOrNull { it.name == toolName }
             toolMutex.withLock { cachedTool = tool }
+            val transport = client.activeTransport?.displayName ?: "MCP"
             ConnectionProbe(
                 success = tool != null,
                 headline = if (tool != null) "Connected · tool ready" else "Connected · tool not found",
                 details = buildList {
-                    add("${server.serverInfo.name} ${server.serverInfo.version} · MCP ${server.protocolVersion}")
+                    add("${server.serverInfo.name} ${server.serverInfo.version} · $transport · MCP ${server.protocolVersion}")
                     add("${tools.size} tools exposed")
                     if (tool == null) {
-                        add("'$toolName' missing. Available: ${tools.take(MAX_LISTED_TOOLS).joinToString { it.name }}")
+                        add("'$toolName' is not among the server's tools. Available: ${tools.take(MAX_LISTED_TOOLS).joinToString { it.name }}")
                     } else {
-                        tool.description?.let { add(it) }
+                        tool.description?.let { add(it.take(MAX_DESCRIPTION_CHARS)) }
                     }
                 },
                 latencyMillis = elapsed,
             )
-        }.getOrElse { it.toFailedProbe(latency) }
+        }.getOrElse { it.toFailedProbe(latency, secrets) }
     }
 
     override suspend fun submit(request: EngineRequest, onProgress: (EngineProgress) -> Unit): Submission {
@@ -101,7 +103,7 @@ class McpGenerationEngine(
         if (outputs.isEmpty()) {
             throw VisionStudioException.ProtocolException(null, "MCP tool '$toolName' returned no media")
         }
-        return Submission.Completed(outputs)
+        return Submission.Completed(outputs, reportedSeed = reportedSeedOf(result))
     }
 
     override suspend fun poll(job: RemoteJob): JobStatus =
@@ -150,6 +152,8 @@ class McpGenerationEngine(
         offer(params.steps, "steps", "num_inference_steps")
         offer(params.guidanceScale, "guidance_scale", "cfg_scale", "guidance")
         offer(params.seed, "seed")
+        // Gradio apps commonly ignore `seed` unless `randomize_seed` is switched off.
+        offer(params.seed?.let { false }, "randomize_seed")
         offer(config.modelId, "model", "model_id")
         offer(params.strength, "strength")
         offer(params.durationSeconds, "duration", "duration_seconds", "seconds")
@@ -172,9 +176,17 @@ class McpGenerationEngine(
         return buildJsonObject { selected.forEach { (key, value) -> put(key, value) } }
     }
 
+    /**
+     * Media in a tool result. Binary blocks (ImageContent, embedded resource blobs) are the media
+     * itself. Text blocks are scanned for URLs or Gradio FileData JSON only when no binary block
+     * exists: a Gradio app returning a tuple such as (image, seed, prompt) sends the image as
+     * ImageContent plus text blocks `Image URL: <file url>`, `<seed>` and `<prompt>`, and reading
+     * that URL as well would save the same image twice.
+     */
     private fun outputsOf(result: CallToolResult): List<EngineOutput> {
         val defaultMime = if (config.slot == EngineSlot.VIDEO_STUDIO) "video/mp4" else "image/png"
         val outputs = mutableListOf<EngineOutput>()
+        val textOutputs = mutableListOf<EngineOutput>()
         result.content.forEach { block ->
             when (block) {
                 is ToolContent.Image -> outputs += EngineOutput.Inline(block.data, block.mimeType)
@@ -187,12 +199,23 @@ class McpGenerationEngine(
                         resource.uri.startsWith("data:") -> parseDataUri(resource.uri)?.let { outputs += it }
                     }
                 }
-                is ToolContent.Text -> outputs += outputsFromText(block.text, defaultMime)
+                is ToolContent.Text -> textOutputs += outputsFromText(block.text, defaultMime)
                 is ToolContent.Unknown -> Unit
             }
         }
-        return outputs.distinctBy { (it as? EngineOutput.Remote)?.url ?: it.toString() }
+        val media = if (outputs.any { it is EngineOutput.Inline }) outputs else outputs + textOutputs
+        return media.distinctBy { (it as? EngineOutput.Remote)?.url ?: it.toString() }
     }
+
+    /**
+     * The seed a tool reports using, when it returns one as a bare integer text block (Gradio's
+     * (image, seed, prompt) tuple). Null unless exactly one such block exists, so prompts or
+     * captions that happen to be numbers are never mistaken for a seed.
+     */
+    private fun reportedSeedOf(result: CallToolResult): Long? =
+        result.content.filterIsInstance<ToolContent.Text>()
+            .mapNotNull { it.text.trim().toLongOrNull() }
+            .singleOrNull()
 
     /** Text blocks may carry a JSON envelope or bare URLs. */
     private fun outputsFromText(text: String, defaultMime: String): List<EngineOutput> {
@@ -210,6 +233,7 @@ class McpGenerationEngine(
     private companion object {
         const val MILLIS_PER_SECOND = 1_000L
         const val MAX_LISTED_TOOLS = 6
+        const val MAX_DESCRIPTION_CHARS = 240
         val URL_PATTERN = Regex("""https?://[^\s"'<>]+""")
         val CANONICAL_KEYS = setOf(
             "prompt", "negative_prompt", "width", "height", "aspect_ratio", "steps",

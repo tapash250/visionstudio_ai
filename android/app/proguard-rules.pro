@@ -33,10 +33,10 @@
 }
 
 # ---------------------------------------------------------------------------
-# Ktor CIO engine (MCP client)
-# The engine is discovered through ServiceLoader, which R8 cannot trace statically.
+# Ktor OkHttp engine (MCP client)
+# Engine containers are discovered through ServiceLoader, which R8 cannot trace statically.
 # ---------------------------------------------------------------------------
--keep class io.ktor.client.engine.cio.CIOEngineContainer { *; }
+-keep class io.ktor.client.engine.okhttp.OkHttpEngineContainer { *; }
 -keep class * implements io.ktor.client.HttpClientEngineContainer { *; }
 -keepclassmembers class io.ktor.** { volatile <fields>; }
 

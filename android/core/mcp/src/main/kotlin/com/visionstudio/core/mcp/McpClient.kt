@@ -14,7 +14,9 @@ import com.visionstudio.core.mcp.protocol.JsonRpcRequest
 import com.visionstudio.core.mcp.protocol.JsonRpcResponse
 import com.visionstudio.core.mcp.protocol.ListToolsParams
 import com.visionstudio.core.mcp.protocol.ListToolsResult
+import com.visionstudio.core.mcp.protocol.MCP_LATEST_PROTOCOL_VERSION
 import com.visionstudio.core.mcp.protocol.MCP_PROTOCOL_VERSION
+import com.visionstudio.core.mcp.protocol.MCP_SUPPORTED_PROTOCOL_VERSIONS
 import com.visionstudio.core.mcp.protocol.McpJson
 import com.visionstudio.core.mcp.protocol.McpMethods
 import com.visionstudio.core.mcp.protocol.McpNotification
@@ -33,9 +35,11 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.delete
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.prepareGet
+import io.ktor.client.request.preparePost
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsChannel
@@ -79,11 +83,19 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
- * Model Context Protocol client over the HTTP+SSE transport (protocol revision 2024-11-05).
+ * Model Context Protocol client speaking either transport ([McpServerConfig.transport]):
  *
- * The client opens a long-lived `text/event-stream` GET. The server's first `endpoint` event
- * names the URL for JSON-RPC POSTs, and responses, server requests and notifications all
- * arrive back on the stream as `message` events, correlated here by request id.
+ * - **Streamable HTTP** (2025-03-26 / 2025-06-18): every JSON-RPC message is a POST to one URL,
+ *   answered with `application/json` or a `text/event-stream` that carries progress, server
+ *   requests and finally the response. A returned `Mcp-Session-Id`, and the negotiated
+ *   `MCP-Protocol-Version`, are sent on every later request. Used by Gradio Spaces
+ *   (`/gradio_api/mcp/`).
+ * - **Legacy HTTP+SSE** (2024-11-05): a long-lived `text/event-stream` GET whose first `endpoint`
+ *   event names the URL for POSTs; responses arrive back on that stream.
+ *
+ * [McpTransport.AUTO] tries Streamable HTTP and falls back to legacy SSE when the server answers
+ * the `initialize` POST with a 4xx other than 401/403, as the specification describes.
+ * Responses are correlated by request id in both cases.
  *
  * Dispatchers: socket I/O runs on [ioDispatcher]; JSON-RPC encoding and decoding runs on
  * [defaultDispatcher].
@@ -116,6 +128,14 @@ class McpClient internal constructor(
     @Volatile private var endpoint = CompletableDeferred<String>()
     @Volatile private var streamJob: Job? = null
 
+    /** The transport in use for the current session; null until [connect] picks one. */
+    @Volatile var activeTransport: McpTransport? = null
+        private set
+
+    /** Streamable HTTP session state, set from the `initialize` exchange. */
+    @Volatile private var sessionId: String? = null
+    @Volatile private var negotiatedVersion: String? = null
+
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state.asStateFlow()
 
@@ -123,8 +143,8 @@ class McpClient internal constructor(
     val notifications: SharedFlow<McpNotification> = _notifications.asSharedFlow()
 
     /**
-     * Opens the stream and performs the `initialize` → `notifications/initialized` handshake.
-     * Idempotent while connected; after a failure, calling it again starts a fresh session.
+     * Performs the `initialize` → `notifications/initialized` handshake over the configured
+     * transport. Idempotent while connected; after a failure, calling it again starts afresh.
      */
     suspend fun connect(): InitializeResult = connectMutex.withLock {
         when (val current = _state.value) {
@@ -134,24 +154,22 @@ class McpClient internal constructor(
         }
         _state.value = State.Connecting
         try {
-            streamJob?.cancelAndJoin()
-            endpoint = CompletableDeferred()
-            streamJob = scope.launch { runEventStream() }
-
-            withTimeoutOrNull(config.connectTimeoutMillis) { endpoint.await() }
-                ?: throw VisionStudioException.TimeoutException("MCP server did not announce an endpoint")
-
-            val result = requestTyped(
-                method = McpMethods.INITIALIZE,
-                params = InitializeParams(MCP_PROTOCOL_VERSION, JsonObject(emptyMap()), clientInfo),
-                paramsSerializer = InitializeParams.serializer(),
-                resultSerializer = InitializeResult.serializer(),
-            )
-            if (result.protocolVersion != MCP_PROTOCOL_VERSION) {
-                throw VisionStudioException.ProtocolException(
-                    rpcErrorCode = null,
-                    message = "Unsupported MCP protocol version ${result.protocolVersion}; client speaks $MCP_PROTOCOL_VERSION",
-                )
+            val result = when (config.transport) {
+                McpTransport.STREAMABLE_HTTP -> try {
+                    initializeStreamable()
+                } catch (notStreamable: StreamableHttpRejected) {
+                    throw VisionStudioException.UnsupportedTransportException(
+                        "The server does not accept Streamable HTTP at this URL (HTTP ${notStreamable.status}). " +
+                            "If it is a legacy SSE server, use its /sse URL.",
+                        notStreamable,
+                    )
+                }
+                McpTransport.SSE -> initializeLegacy(fallbackFrom = null)
+                McpTransport.AUTO -> try {
+                    initializeStreamable()
+                } catch (notStreamable: StreamableHttpRejected) {
+                    initializeLegacy(fallbackFrom = notStreamable)
+                }
             }
             notify(McpMethods.INITIALIZED, null)
             _state.value = State.Ready(result)
@@ -166,6 +184,85 @@ class McpClient internal constructor(
             _state.value = State.Failed(mapped)
             throw mapped
         }
+    }
+
+    /** `initialize` as one POST to [McpServerConfig.url]; the response arrives on that POST. */
+    private suspend fun initializeStreamable(): InitializeResult {
+        resetSession(McpTransport.STREAMABLE_HTTP)
+        endpoint.complete(config.url)
+        val result = initialize(MCP_LATEST_PROTOCOL_VERSION)
+        negotiatedVersion = result.protocolVersion
+        return result
+    }
+
+    /**
+     * `initialize` over the legacy transport: open the SSE GET, wait for its `endpoint` event, then
+     * POST there. [fallbackFrom] is set when AUTO already found Streamable HTTP refused.
+     */
+    private suspend fun initializeLegacy(fallbackFrom: StreamableHttpRejected?): InitializeResult {
+        resetSession(McpTransport.SSE)
+        streamJob = scope.launch { runEventStream() }
+        try {
+            withTimeoutOrNull(config.connectTimeoutMillis) { endpoint.await() }
+                ?: throw VisionStudioException.TimeoutException("MCP server did not announce an endpoint")
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Exception) {
+            throw legacyFailure(failure, fallbackFrom)
+        }
+        return initialize(MCP_PROTOCOL_VERSION)
+    }
+
+    private suspend fun initialize(requestedVersion: String): InitializeResult {
+        val result = requestTyped(
+            method = McpMethods.INITIALIZE,
+            params = InitializeParams(requestedVersion, JsonObject(emptyMap()), clientInfo),
+            paramsSerializer = InitializeParams.serializer(),
+            resultSerializer = InitializeResult.serializer(),
+        )
+        if (result.protocolVersion !in MCP_SUPPORTED_PROTOCOL_VERSIONS) {
+            throw VisionStudioException.ProtocolException(
+                rpcErrorCode = null,
+                message = "Unsupported MCP protocol version ${result.protocolVersion}; " +
+                    "client speaks ${MCP_SUPPORTED_PROTOCOL_VERSIONS.joinToString()}",
+            )
+        }
+        return result
+    }
+
+    private suspend fun resetSession(transport: McpTransport) {
+        streamJob?.cancelAndJoin()
+        streamJob = null
+        endpoint = CompletableDeferred()
+        sessionId = null
+        negotiatedVersion = null
+        activeTransport = transport
+    }
+
+    /**
+     * Explains a legacy-transport failure that most likely means the URL serves Streamable HTTP
+     * only: no SSE stream, no `endpoint` event, or a 4xx on the GET.
+     */
+    private fun legacyFailure(failure: Exception, fallbackFrom: StreamableHttpRejected?): Exception {
+        val mapped = failure.toVisionStudioException()
+        val looksStreamableOnly = when (mapped) {
+            is VisionStudioException.TimeoutException -> true
+            is VisionStudioException.ProtocolException -> mapped.rpcErrorCode == null && mapped.message.orEmpty().startsWith("Expected text/event-stream")
+            is VisionStudioException.ProviderException -> mapped.httpCode in TRANSPORT_REJECTION_CODES
+            else -> false
+        }
+        if (!looksStreamableOnly && fallbackFrom == null) return mapped
+        // Both transports got 404: the URL is wrong, not the transport.
+        if (fallbackFrom?.status == HttpStatusCode.NotFound.value && (mapped as? VisionStudioException.ProviderException)?.httpCode == HttpStatusCode.NotFound.value) {
+            return mapped
+        }
+        val message = if (fallbackFrom != null) {
+            "The server refused Streamable HTTP (HTTP ${fallbackFrom.status}) and legacy SSE (${mapped.message}). Check the MCP endpoint URL."
+        } else {
+            "No legacy SSE stream at this URL (${mapped.message}). The server may only support Streamable HTTP; " +
+                "use its Streamable HTTP endpoint (for a Gradio Space, …/gradio_api/mcp/)."
+        }
+        return VisionStudioException.UnsupportedTransportException(message, mapped)
     }
 
     /** Lists every tool, following `nextCursor` pagination. */
@@ -221,13 +318,17 @@ class McpClient internal constructor(
         request(McpMethods.PING, null)
     }
 
-    /** Fails in-flight requests, closes the stream and releases the scope. Terminal. */
+    /**
+     * Fails in-flight requests, ends the session (a Streamable HTTP session is DELETEd, best
+     * effort), closes the stream and releases the scope. Terminal.
+     */
     suspend fun close() {
         // Releasing resources must finish even if the caller is itself being cancelled (a screen
         // closing, a worker being stopped); otherwise the stream and scope would leak.
         withContext(NonCancellable) {
             connectMutex.withLock {
                 if (_state.value == State.Closed) return@withContext
+                endStreamableSession()
                 teardownStream(VisionStudioException.NetworkException("MCP client closed"))
                 _state.value = State.Closed
             }
@@ -239,7 +340,7 @@ class McpClient internal constructor(
 
     private suspend fun runEventStream() {
         try {
-            httpClient.prepareGet(config.sseUrl) {
+            httpClient.prepareGet(config.url) {
                 header(HttpHeaders.Accept, ContentType.Text.EventStream.toString())
                 header(HttpHeaders.CacheControl, "no-cache")
                 applyConfiguredHeaders()
@@ -409,7 +510,7 @@ class McpClient internal constructor(
     ): JsonRpcResponse {
         val response = try {
             withTimeoutOrNull(timeoutMillis) {
-                postMessage(body, timeoutMillis)
+                postMessage(body, timeoutMillis, awaiting = deferred, isInitialize = method == McpMethods.INITIALIZE)
                 deferred.await()
             }
         } catch (cancellation: CancellationException) {
@@ -448,8 +549,19 @@ class McpClient internal constructor(
      * Posts one JSON-RPC message. [deadlineMillis] bounds this POST on its own HTTP timeouts,
      * separately from the event stream, whose GET has none. A server may also answer inline, by
      * holding this POST open until the result is ready, which is why the deadline is the request's.
+     * [awaiting] is the response this POST is for, if any; a Streamable HTTP event stream is read
+     * until it completes.
      */
-    private suspend fun postMessage(body: String, deadlineMillis: Long) {
+    private suspend fun postMessage(
+        body: String,
+        deadlineMillis: Long,
+        awaiting: CompletableDeferred<JsonRpcResponse>? = null,
+        isInitialize: Boolean = false,
+    ) {
+        if (activeTransport == McpTransport.STREAMABLE_HTTP) {
+            postStreamable(body, deadlineMillis, awaiting, isInitialize)
+            return
+        }
         if (!endpoint.isCompleted) throw VisionStudioException.NetworkException("MCP endpoint not yet announced")
         val target = endpoint.await()
         val response = try {
@@ -482,6 +594,121 @@ class McpClient internal constructor(
         }
     }
 
+    /**
+     * Streamable HTTP: POST to the MCP URL accepting both response forms. The response is read
+     * here, while the request's deadline runs: JSON is handled at once, an event stream is read
+     * event by event (progress and server requests included) until the awaited response arrives
+     * or the server ends it.
+     */
+    private suspend fun postStreamable(
+        body: String,
+        deadlineMillis: Long,
+        awaiting: CompletableDeferred<JsonRpcResponse>?,
+        isInitialize: Boolean,
+    ) {
+        try {
+            withContext(ioDispatcher) {
+                httpClient.preparePost(config.url) {
+                    contentType(ContentType.Application.Json)
+                    header(HttpHeaders.Accept, STREAMABLE_ACCEPT)
+                    applyConfiguredHeaders()
+                    applySessionHeaders()
+                    setBody(body)
+                    timeout {
+                        connectTimeoutMillis = minOf(config.connectTimeoutMillis, deadlineMillis)
+                        requestTimeoutMillis = deadlineMillis
+                        socketTimeoutMillis = deadlineMillis
+                    }
+                }.execute { response -> handleStreamableResponse(response, awaiting, isInitialize) }
+            }
+        } catch (timedOut: HttpRequestTimeoutException) {
+            throw VisionStudioException.TimeoutException("MCP request timed out after ${deadlineMillis}ms", timedOut)
+        } catch (timedOut: ConnectTimeoutException) {
+            throw VisionStudioException.TimeoutException("MCP server did not accept the connection in time", timedOut)
+        } catch (timedOut: SocketTimeoutException) {
+            throw VisionStudioException.TimeoutException("MCP response stalled", timedOut)
+        }
+    }
+
+    private suspend fun handleStreamableResponse(
+        response: HttpResponse,
+        awaiting: CompletableDeferred<JsonRpcResponse>?,
+        isInitialize: Boolean,
+    ) {
+        val status = response.status.value
+        if (isInitialize && status in TRANSPORT_REJECTION_CODES) {
+            // Not a Streamable HTTP endpoint (a legacy SSE URL typically answers POST with 405).
+            throw StreamableHttpRejected(status)
+        }
+        if (sessionId != null && status == HttpStatusCode.NotFound.value) {
+            throw VisionStudioException.NetworkException("MCP session expired; reconnect to start a new one")
+        }
+        response.throwIfUnsuccessful()
+        if (isInitialize) sessionId = response.headers[HEADER_SESSION_ID]?.takeIf { it.isNotBlank() }
+
+        val type = response.contentType()
+        when {
+            // Accepted with no body: the answer to a notification or a response we posted.
+            status == HttpStatusCode.Accepted.value -> {
+                if (awaiting != null) {
+                    if (isInitialize) throw StreamableHttpRejected(status)
+                    throw VisionStudioException.ProtocolException(null, "MCP server accepted a request without answering it")
+                }
+            }
+            type?.match(ContentType.Text.EventStream) == true -> readResponseStream(response, awaiting)
+            type?.match(ContentType.Application.Json) == true -> {
+                val inline = response.bodyAsText()
+                if (inline.isNotBlank()) handleEvent(SseEvent(SseEventParser.DEFAULT_EVENT, inline, null, null))
+            }
+            awaiting == null -> Unit
+            isInitialize -> throw StreamableHttpRejected(status)
+            else -> throw VisionStudioException.ProtocolException(null, "MCP server answered with unexpected content type $type")
+        }
+        if (awaiting != null && !awaiting.isCompleted) {
+            throw VisionStudioException.ProtocolException(null, "MCP server ended the response without a JSON-RPC result")
+        }
+    }
+
+    private suspend fun readResponseStream(response: HttpResponse, awaiting: CompletableDeferred<JsonRpcResponse>?) {
+        val parser = SseEventParser(maxDataChars = config.maxEventBytes)
+        val lines = SseLineReader(response.bodyAsChannel(), maxLineBytes = config.maxEventBytes + SSE_FIELD_OVERHEAD)
+        try {
+            while (awaiting?.isCompleted != true) {
+                val line = lines.readLine() ?: break
+                parser.feedLine(line)?.let { handleEvent(it) }
+            }
+        } catch (oversized: SseEventTooLargeException) {
+            throw oversizedFrame(oversized)
+        }
+    }
+
+    private fun HttpRequestBuilder.applySessionHeaders() {
+        sessionId?.let { header(HEADER_SESSION_ID, it) }
+        negotiatedVersion?.let { header(HEADER_PROTOCOL_VERSION, it) }
+    }
+
+    /** Tells a stateful Streamable HTTP server the session is over. Failures are irrelevant here. */
+    private suspend fun endStreamableSession() {
+        val id = sessionId ?: return
+        if (activeTransport != McpTransport.STREAMABLE_HTTP || _state.value !is State.Ready) return
+        runCatching {
+            withTimeoutOrNull(SESSION_DELETE_TIMEOUT_MILLIS) {
+                withContext(ioDispatcher) {
+                    httpClient.delete(config.url) {
+                        applyConfiguredHeaders()
+                        header(HEADER_SESSION_ID, id)
+                        negotiatedVersion?.let { header(HEADER_PROTOCOL_VERSION, it) }
+                    }
+                }
+            }
+        }
+        sessionId = null
+    }
+
+    /** The `initialize` POST was answered in a way only a non-Streamable-HTTP endpoint would. */
+    private class StreamableHttpRejected(val status: Int) :
+        Exception("Streamable HTTP initialize answered with HTTP $status")
+
     // endregion
 
     // region helpers
@@ -502,13 +729,13 @@ class McpClient internal constructor(
 
     /** Resolves the announced endpoint and enforces same-origin, as the spec requires. */
     private fun resolveEndpoint(raw: String): String {
-        val base = URI(config.sseUrl)
+        val base = URI(config.url)
         val resolved = base.resolve(raw)
         val sameOrigin = resolved.scheme.equals(base.scheme, ignoreCase = true) &&
             resolved.host.equals(base.host, ignoreCase = true) &&
             resolved.effectivePort() == base.effectivePort()
         if (!sameOrigin) {
-            val error = VisionStudioException.ProtocolException(null, "MCP endpoint $resolved is not same-origin with ${config.sseUrl}")
+            val error = VisionStudioException.ProtocolException(null, "MCP endpoint $resolved is not same-origin with ${config.url}")
             endpoint.completeExceptionally(error)
             throw error
         }
@@ -562,6 +789,13 @@ class McpClient internal constructor(
         const val HTTP_PORT = 80
         const val HTTPS_PORT = 443
         const val NOTIFICATION_POST_TIMEOUT_MILLIS = 15_000L
+        const val SESSION_DELETE_TIMEOUT_MILLIS = 3_000L
+        const val HEADER_SESSION_ID = "Mcp-Session-Id"
+        const val HEADER_PROTOCOL_VERSION = "MCP-Protocol-Version"
+        const val STREAMABLE_ACCEPT = "application/json, text/event-stream"
+
+        /** Answers to the Streamable HTTP `initialize` POST that mean "not this transport" (auth is 401/403). */
+        val TRANSPORT_REJECTION_CODES = setOf(400, 404, 405, 406, 415)
 
         /** Room for the field name in front of a line's value ("data: "). */
         const val SSE_FIELD_OVERHEAD = 16

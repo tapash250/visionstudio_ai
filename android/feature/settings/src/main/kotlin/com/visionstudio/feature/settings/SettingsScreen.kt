@@ -339,6 +339,7 @@ private fun SlotForm(
                     supportingText = errors[SettingsField.Endpoint] ?: if (protocol.isMcp) stringResource(R.string.support_mcp) else null,
                     isError = SettingsField.Endpoint in errors,
                     mono = true,
+                    wrap = true,
                     leadingIcon = Icons.Rounded.Link,
                     keyboardType = KeyboardType.Uri,
                     enabled = enabled,
@@ -352,6 +353,7 @@ private fun SlotForm(
                         supportingText = errors[SettingsField.Tool],
                         isError = SettingsField.Tool in errors,
                         mono = true,
+                        wrap = true,
                         leadingIcon = Icons.Rounded.Construction,
                         enabled = enabled,
                     )
@@ -364,6 +366,7 @@ private fun SlotForm(
                     supportingText = errors[SettingsField.Model],
                     isError = SettingsField.Model in errors,
                     mono = true,
+                    wrap = true,
                     leadingIcon = Icons.Rounded.Memory,
                     enabled = enabled,
                 )

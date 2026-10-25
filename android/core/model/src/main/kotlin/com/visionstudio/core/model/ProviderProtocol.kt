@@ -8,7 +8,7 @@ enum class ProviderProtocol(val displayName: String) {
     /** Conventional HTTP/JSON provider APIs (OpenAI-compatible, Fal.ai queue, custom). */
     REST("Standard REST"),
 
-    /** JSON-RPC 2.0 over Server-Sent Events following the Model Context Protocol. */
+    /** Model Context Protocol: JSON-RPC 2.0 over Streamable HTTP, or legacy HTTP+SSE. */
     MCP("Model Context Protocol"),
 }
 
