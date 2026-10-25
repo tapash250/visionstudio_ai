@@ -14,6 +14,21 @@ android {
         versionName = "0.1.0"
     }
 
+    // A release key from the environment, so CI signs every build with the same certificate and
+    // each APK installs over the previous one (`adb install -r`) with app data intact. Set
+    // VISIONSTUDIO_KEYSTORE_FILE plus the three VISIONSTUDIO_* passwords/alias below; CI decodes
+    // them from repository secrets. Without them, release builds use this machine's debug key.
+    val releaseSigning = providers.environmentVariable("VISIONSTUDIO_KEYSTORE_FILE").orNull?.let { path ->
+        fun required(name: String): String = providers.environmentVariable(name).orNull
+            ?: error("VISIONSTUDIO_KEYSTORE_FILE is set but $name is not")
+        signingConfigs.create("release") {
+            storeFile = file(path)
+            storePassword = required("VISIONSTUDIO_KEYSTORE_PASSWORD")
+            keyAlias = required("VISIONSTUDIO_KEY_ALIAS")
+            keyPassword = required("VISIONSTUDIO_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -25,9 +40,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // Debug-signed so `assembleRelease` is installable locally; swap for a real
-            // signingConfig in CI before publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = releaseSigning ?: signingConfigs.getByName("debug")
         }
     }
 }

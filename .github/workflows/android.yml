@@ -11,11 +11,15 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android.yml'
+  # Manual release build from the Actions tab. From main it also updates the latest-main release;
+  # from any other branch it only uploads the artifact.
+  workflow_dispatch:
 
-# A newer push to the same branch or PR supersedes the run in progress.
+# A newer push to a PR supersedes the run in progress. Pushes to main queue instead, so a release
+# build is never cancelled half-way through publishing.
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -62,3 +66,122 @@ jobs:
             android/**/build/reports/lint-results-*.html
             android/**/build/test-results/
           retention-days: 7
+
+  release-apk:
+    name: Signed release APK
+    needs: android
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create/update the latest-main release
+    defaults:
+      run:
+        working-directory: android
+    env:
+      APK_DIR: app/build/outputs/apk/release
+      APK_NAME: visionstudio-release.apk
+      # Read by app/build.gradle.kts. Every build is signed with this one key, so each APK installs
+      # over the previous one (adb install -r) without losing app data.
+      VISIONSTUDIO_KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
+      VISIONSTUDIO_KEYSTORE_PASSWORD: ${{ secrets.VISIONSTUDIO_KEYSTORE_PASSWORD }}
+      VISIONSTUDIO_KEY_ALIAS: ${{ secrets.VISIONSTUDIO_KEY_ALIAS }}
+      VISIONSTUDIO_KEY_PASSWORD: ${{ secrets.VISIONSTUDIO_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          (yes || true) | "$sdkmanager" --licenses > /dev/null
+          "$sdkmanager" --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Never fall back to a runner's throwaway debug key: an APK signed with it can't be
+      # installed over the previous build.
+      - name: Restore the release keystore
+        env:
+          VISIONSTUDIO_KEYSTORE_BASE64: ${{ secrets.VISIONSTUDIO_KEYSTORE_BASE64 }}
+        run: |
+          missing=""
+          for name in VISIONSTUDIO_KEYSTORE_BASE64 VISIONSTUDIO_KEYSTORE_PASSWORD VISIONSTUDIO_KEY_ALIAS VISIONSTUDIO_KEY_PASSWORD; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Release signing not configured::Missing repository secrets:$missing. See android/README-release-signing.md."
+            exit 1
+          fi
+          printf '%s' "$VISIONSTUDIO_KEYSTORE_BASE64" | base64 --decode > "$VISIONSTUDIO_KEYSTORE_FILE"
+
+      - name: Build signed R8 release APK
+        run: ./gradlew :app:assembleRelease
+
+      - name: Verify signature and record checksum
+        id: apk
+        run: |
+          apksigner="$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          apk="$APK_DIR/app-release.apk"
+          "$apksigner" verify --verbose "$apk"
+          signed=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          expected=$(keytool -exportcert -keystore "$VISIONSTUDIO_KEYSTORE_FILE" -alias "$VISIONSTUDIO_KEY_ALIAS" \
+            -storepass:env VISIONSTUDIO_KEYSTORE_PASSWORD | sha256sum | cut -d' ' -f1)
+          if [ -z "$signed" ] || [ "$signed" != "$expected" ]; then
+            echo "::error::APK signer ($signed) is not the release key ($expected)"
+            exit 1
+          fi
+          cp "$apk" "$APK_DIR/$APK_NAME"
+          size=$(stat -c %s "$APK_DIR/$APK_NAME")
+          sha256=$(sha256sum "$APK_DIR/$APK_NAME" | cut -d' ' -f1)
+          {
+            echo "sha256=$sha256"
+            echo "size=$size"
+            echo "signer=$signed"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### $APK_NAME"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Commit | \`$GITHUB_SHA\` |"
+            echo "| Size | $size bytes |"
+            echo "| SHA-256 | \`$sha256\` |"
+            echo "| Signing certificate SHA-256 | \`$signed\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionstudio-release-apk
+          path: android/${{ env.APK_DIR }}/${{ env.APK_NAME }}
+          if-no-files-found: error
+
+      # A plain .apk download (artifacts arrive zipped), at a URL that never changes:
+      # https://github.com/<owner>/<repo>/releases/download/latest-main/visionstudio-release.apk
+      - name: Publish to the latest-main release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA256: ${{ steps.apk.outputs.sha256 }}
+          SIZE: ${{ steps.apk.outputs.size }}
+          SIGNER: ${{ steps.apk.outputs.signer }}
+        run: |
+          # The backticks are literal Markdown in the release notes, not command substitution.
+          # shellcheck disable=SC2016
+          notes=$(printf 'Signed R8 release build of `main` at %s.\n\n- Size: %s bytes\n- SHA-256: `%s`\n- Signing certificate SHA-256: `%s`\n\nReplaced on every push to `main`.' \
+            "$GITHUB_SHA" "$SIZE" "$SHA256" "$SIGNER")
+          if gh release view latest-main > /dev/null 2>&1; then
+            # Move the tag to this commit, then refresh the notes and replace the asset.
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest-main" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+            gh release edit latest-main --title "Latest main build" --notes "$notes" --prerelease
+          else
+            gh release create latest-main --target "$GITHUB_SHA" --title "Latest main build" --notes "$notes" --prerelease
+          fi
+          gh release upload latest-main "$APK_DIR/$APK_NAME" --clobber
+          echo "Release asset: $GITHUB_SERVER_URL/$GH_REPO/releases/download/latest-main/$APK_NAME" >> "$GITHUB_STEP_SUMMARY"
