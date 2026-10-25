@@ -115,8 +115,8 @@ class RestEnginesTest {
         val probe = OpenAiCompatibleEngine(config(EngineSlot.TEXT_TO_IMAGE, RestDialect.OPENAI_COMPATIBLE), "bad", http, Dispatchers.IO)
             .testConnection()
         assertFalse(probe.success)
-        assertEquals("Authentication failed", probe.headline)
-        assertTrue(probe.details.single().contains("Incorrect API key"))
+        assertEquals("Authentication failed (HTTP 401)", probe.headline)
+        assertTrue(probe.details.toString(), probe.details.any { it.contains("Incorrect API key") })
     }
 
     @Test

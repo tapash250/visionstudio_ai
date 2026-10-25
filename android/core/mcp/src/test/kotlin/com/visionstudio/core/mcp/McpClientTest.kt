@@ -58,7 +58,9 @@ class McpClientTest {
         clientInfo = McpClientFactory.DEFAULT_CLIENT_INFO,
     ).create(
         McpServerConfig(
-            sseUrl = "https://mcp.example.com/sse",
+            url = "https://mcp.example.com/sse",
+            // FakeMcpServer is a legacy 2024-11-05 server; Streamable HTTP is covered elsewhere.
+            transport = McpTransport.SSE,
             headers = headers,
             connectTimeoutMillis = connectTimeoutMillis,
             requestTimeoutMillis = requestTimeoutMillis,
@@ -127,9 +129,11 @@ class McpClientTest {
     }
 
     @Test
-    fun `missing endpoint event times out`() = mcpTest {
+    fun `missing endpoint event is reported as a transport mismatch, keeping the timeout as cause`() = mcpTest {
         val server = FakeMcpServer(announceEndpoint = false)
-        expectFailure<VisionStudioException.TimeoutException> { server.client(connectTimeoutMillis = 300).connect() }
+        val error = expectFailure<VisionStudioException.UnsupportedTransportException> { server.client(connectTimeoutMillis = 300).connect() }
+        assertTrue(error.cause is VisionStudioException.TimeoutException)
+        assertTrue(error.message!!.contains("Streamable HTTP"))
     }
 
     @Test
@@ -146,9 +150,10 @@ class McpClientTest {
     }
 
     @Test
-    fun `non event-stream content type is a protocol error`() = mcpTest {
+    fun `non event-stream content type is reported as a transport mismatch`() = mcpTest {
         val server = FakeMcpServer(sseContentType = ContentType.Text.Html)
-        expectFailure<VisionStudioException.ProtocolException> { server.client().connect() }
+        val error = expectFailure<VisionStudioException.UnsupportedTransportException> { server.client().connect() }
+        assertTrue(error.cause is VisionStudioException.ProtocolException)
     }
 
     @Test
