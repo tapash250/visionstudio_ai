@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,16 +26,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -46,6 +42,7 @@ import coil3.compose.AsyncImage
 import com.visionstudio.core.designsystem.component.AuroraBackground
 import com.visionstudio.core.designsystem.component.BlurHashImage
 import com.visionstudio.core.designsystem.component.EngineChip
+import com.visionstudio.core.designsystem.component.ScreenTitle
 import com.visionstudio.core.designsystem.component.SectionHeader
 import com.visionstudio.core.designsystem.haptics.HapticPattern
 import com.visionstudio.core.designsystem.haptics.tactileClickable
@@ -55,8 +52,6 @@ import com.visionstudio.core.designsystem.modifier.staggeredEntrance
 import com.visionstudio.core.designsystem.theme.StudioCyan
 import com.visionstudio.core.designsystem.theme.StudioIndigoBright
 import com.visionstudio.core.designsystem.theme.StudioShapes
-import com.visionstudio.core.designsystem.theme.StudioTextSecondary
-import com.visionstudio.core.designsystem.theme.StudioViolet
 import com.visionstudio.core.designsystem.theme.VisionStudioTheme
 import com.visionstudio.core.model.MediaItem
 import com.visionstudio.feature.t2i.ui.ModernPromptDock
@@ -131,20 +126,11 @@ fun ImagineScreen(
 
 @Composable
 private fun Header(engine: EngineBadge, onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
-    val prism = remember { Brush.linearGradient(listOf(StudioIndigoBright, StudioViolet, StudioCyan)) }
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.t2i_eyebrow).uppercase(),
-                style = VisionStudioTheme.typography.eyebrow,
-                color = StudioCyan,
-            )
-            Text(
-                text = "VisionStudio",
-                style = MaterialTheme.typography.headlineMedium.copy(brush = prism),
-                modifier = Modifier.semantics { heading() },
-            )
-        }
+    ScreenTitle(
+        eyebrow = stringResource(R.string.t2i_section),
+        title = stringResource(R.string.t2i_eyebrow),
+        modifier = modifier,
+    ) {
         EngineChip(
             configured = engine.configured,
             label = engine.label,

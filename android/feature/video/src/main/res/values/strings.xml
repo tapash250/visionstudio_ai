@@ -12,6 +12,7 @@
 
     <!-- Screen -->
     <string name="video_eyebrow">Motion</string>
+    <string name="video_section">VisionStudio • Video</string>
     <string name="video_engine_none">No engine</string>
     <string name="video_open_settings">Engine settings</string>
 
@@ -21,8 +22,8 @@
     <string name="video_empty_title">Bring a frame to life</string>
     <string name="video_empty_body">Describe a shot, pick a camera move, and your video renders in the background. You can leave the app.</string>
     <string name="video_unconfigured_title">Connect a video engine</string>
-    <string name="video_unconfigured_body">Motion needs a Video Studio provider. Add any REST or MCP engine in the Engine Room.</string>
-    <string name="video_unconfigured_action">Open Engine Room</string>
+    <string name="video_unconfigured_body">Motion needs a Video Studio provider. Add any REST or MCP engine in Settings.</string>
+    <string name="video_unconfigured_action">Open Settings</string>
 
     <string name="video_prompt_hint">A slow dolly through a neon-lit alley at night…</string>
     <string name="video_photo_hint">Choose the first frame</string>

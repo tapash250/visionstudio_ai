@@ -75,4 +75,11 @@ dependencies {
 dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// The screenshot renderer needs ComponentActivity from the debug-only ui-test-manifest.
+tasks.withType<Test>().configureEach {
+    if (name.contains("Release")) exclude("**/screenshots/**")
 }

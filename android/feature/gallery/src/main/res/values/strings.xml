@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="vault_eyebrow">Vault</string>
-    <string name="vault_title">Your creations</string>
+    <string name="vault_title">VisionStudio • Your creations</string>
     <string name="vault_count">%1$d items</string>
 
     <string name="filter_all">All</string>

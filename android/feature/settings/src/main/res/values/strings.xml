@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_eyebrow">VisionStudio · Engines</string>
-    <string name="settings_title">Engine\nRoom</string>
+    <string name="settings_eyebrow">VisionStudio • Engines</string>
+    <string name="settings_title">Settings</string>
     <string name="settings_subtitle">Wire each studio to any REST or MCP provider. Keys never leave the hardware Keystore.</string>
 
     <string name="slot_t2i">Imagine</string>
@@ -52,10 +52,10 @@
     <string name="support_mcp">JSON-RPC 2.0 over Streamable HTTP (MCP 2025-06-18), falling back to legacy SSE (2024-11-05) automatically.</string>
 
     <string name="status_unconfigured">Not configured</string>
-    <string name="status_saved">Saved · ready</string>
+    <string name="status_saved">Saved • ready</string>
     <string name="status_draft">Unsaved changes</string>
     <string name="status_testing">Probing connection…</string>
-    <string name="status_verified">Verified · %1$d ms</string>
+    <string name="status_verified">Verified • %1$d ms</string>
     <string name="status_failed">Check failed</string>
 
     <string name="action_test">Test</string>

@@ -46,15 +46,13 @@ import com.visionstudio.core.designsystem.haptics.HapticPattern
 import com.visionstudio.core.designsystem.haptics.tactileClickable
 import com.visionstudio.core.designsystem.modifier.frostedGlass
 import com.visionstudio.core.designsystem.modifier.glowingBorder
-import com.visionstudio.core.designsystem.theme.StudioCyan
-import com.visionstudio.core.designsystem.theme.StudioIndigo
+import com.visionstudio.core.designsystem.theme.NeonBrushes
 import com.visionstudio.core.designsystem.theme.StudioShapes
 import com.visionstudio.core.designsystem.theme.StudioSlate
 import com.visionstudio.core.designsystem.theme.StudioTextTertiary
-import com.visionstudio.core.designsystem.theme.StudioViolet
 
 /**
- * The single primary call-to-action per screen: a prism-gradient pill with a light sheen
+ * The single primary call-to-action per screen: a pointed violet→blue HUD plate with a light sheen
  * sweeping across it every few seconds, a breathing outer glow, and a spring press. While
  * [loading], the label cross-fades to [loadingText] beside an orbiting arc.
  */
@@ -93,7 +91,7 @@ fun PrismButton(
     )
     val activeFraction by animateFloatAsState(if (enabled) 1f else 0f, label = "prismEnabled")
 
-    val shape = StudioShapes.Chip
+    val shape = StudioShapes.Tab
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 56.dp)
@@ -107,7 +105,7 @@ fun PrismButton(
             .clip(shape)
             .drawWithCache {
                 val outline = shape.createOutline(size, layoutDirection, this)
-                val prism = Brush.horizontalGradient(listOf(StudioIndigo, StudioViolet, StudioCyan))
+                val prism = NeonBrushes.Selected
                 val band = size.width * SHEEN_BAND
                 val sheenBrush = Brush.linearGradient(
                     colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.32f), Color.Transparent),
@@ -119,8 +117,8 @@ fun PrismButton(
                     listOf(Color.White.copy(alpha = 0.22f), Color.Transparent),
                     endY = size.height * 0.55f,
                 )
-                val hairline = Stroke(width = 1.dp.toPx())
-                val hairlineBrush = SolidColor(Color.White.copy(alpha = 0.18f))
+                val hairline = Stroke(width = 2.4.dp.toPx())
+                val hairlineBrush = NeonBrushes.Glyph
                 val width = size.width
                 onDrawBehind {
                     val active = activeFraction
@@ -169,7 +167,7 @@ fun PrismButton(
     }
 }
 
-/** Secondary action that sits beside a [PrismButton]: frosted pill, no gradient. */
+/** Secondary action that sits beside a [PrismButton]: navy HUD plate with a neon frame. */
 @Composable
 fun GhostButton(
     text: String,
@@ -181,7 +179,7 @@ fun GhostButton(
     Box(
         modifier = modifier
             .defaultMinSize(minHeight = 56.dp)
-            .frostedGlass(shape = StudioShapes.Chip)
+            .frostedGlass(shape = StudioShapes.Tab, fill = GHOST_FILL, border = NeonBrushes.FrameSoft, borderWidth = 1.2.dp)
             .tactileClickable(enabled = enabled, haptic = HapticPattern.Click, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 16.dp),
         contentAlignment = Alignment.Center,
@@ -214,7 +212,8 @@ private fun OrbitSpinner(angle: () -> Float) {
 
 private fun labelColor(enabled: Boolean): Color = if (enabled) Color.White else StudioTextTertiary
 
-private val PRISM_GLOW = Brush.horizontalGradient(listOf(StudioIndigo, StudioViolet, StudioCyan))
+private val PRISM_GLOW = NeonBrushes.Glyph
+private val GHOST_FILL = Color(0xCC0A1238)
 private const val SHEEN_SWEEP_MILLIS = 1_400
 private const val SHEEN_REST_MILLIS = 1_800
 private const val BREATH_MILLIS = 2_200

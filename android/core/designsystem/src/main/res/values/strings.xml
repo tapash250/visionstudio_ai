@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_vision">Vision</string>
+    <string name="brand_studio">Studio</string>
+    <string name="brand_tagline">Imagine • Create • Explore</string>
+    <string name="brand_logo">Vision Studio</string>
+    <string name="action_profile">Profile and engine settings</string>
+    <string name="action_copy">Copy value</string>
+    <string name="action_copied">Copied</string>
+    <string name="action_next_option">Next option</string>
+</resources>

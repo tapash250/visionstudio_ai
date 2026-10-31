@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="edit_eyebrow">Edit</string>
+    <string name="edit_section">VisionStudio • Inpaint</string>
     <string name="edit_engine_none">No engine</string>
     <string name="edit_open_settings">Engine settings</string>
 

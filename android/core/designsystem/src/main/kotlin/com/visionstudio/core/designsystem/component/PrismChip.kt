@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
@@ -26,8 +25,8 @@ import com.visionstudio.core.designsystem.haptics.tactileClickable
 import com.visionstudio.core.designsystem.modifier.frostedGlass
 import com.visionstudio.core.designsystem.modifier.glowingBorder
 import com.visionstudio.core.designsystem.theme.StudioCyan
-import com.visionstudio.core.designsystem.theme.StudioGlassFillStrong
-import com.visionstudio.core.designsystem.theme.StudioIndigoBright
+import com.visionstudio.core.designsystem.theme.NeonBrushes
+import com.visionstudio.core.designsystem.theme.StudioGlassFill
 import com.visionstudio.core.designsystem.theme.StudioShapes
 import com.visionstudio.core.designsystem.theme.StudioTextSecondary
 
@@ -59,8 +58,8 @@ fun PrismChip(
             .glowingBorder(CHIP_GLOW, StudioShapes.Chip, width = 0.dp, glowRadius = 6.dp, intensity = { selection.value })
             .frostedGlass(
                 shape = StudioShapes.Chip,
-                fill = if (selected) StudioGlassFillStrong else StudioGlassFillStrong.copy(alpha = 0.06f),
-                border = if (selected) CHIP_GLOW else Brush.linearGradient(listOf(Color(0x1FFFFFFF), Color(0x1FFFFFFF))),
+                fill = if (selected) SELECTED_FILL else StudioGlassFill,
+                border = if (selected) CHIP_GLOW else NeonBrushes.FrameSoft,
             )
             .semantics { this.selected = selected }
             .tactileClickable(haptic = HapticPattern.Tick, role = Role.RadioButton, onClick = onClick)
@@ -73,5 +72,6 @@ fun PrismChip(
     }
 }
 
-private val CHIP_GLOW = Brush.horizontalGradient(listOf(StudioIndigoBright, StudioCyan))
+private val CHIP_GLOW = NeonBrushes.Glyph
+private val SELECTED_FILL = Color(0x664D2FD8)
 private const val POP = 0.04f
