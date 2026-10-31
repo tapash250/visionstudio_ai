@@ -2,8 +2,10 @@ package com.visionstudio.app.navigation
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
@@ -15,12 +17,14 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.AutoFixHigh
-import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.PhotoLibrary
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,7 +39,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.visionstudio.core.designsystem.component.BottomBarItem
+import com.visionstudio.core.designsystem.component.StudioBackdrop
 import com.visionstudio.core.designsystem.component.StudioBottomBar
+import com.visionstudio.core.designsystem.component.StudioHeader
 import com.visionstudio.feature.gallery.GalleryRoute
 import com.visionstudio.feature.imageedit.EditRoute
 import com.visionstudio.feature.settings.SettingsRoute
@@ -43,8 +49,8 @@ import com.visionstudio.feature.t2i.ImagineRoute
 import com.visionstudio.feature.video.VideoRoute
 
 /**
- * The app's single navigation graph: Generate, Edit, Video, Vault and Settings behind a floating
- * bottom bar.
+ * The app's single navigation graph: Generate, Edit, Video, Vault and Settings inside the
+ * [StudioShell] (header card, backdrop and neon dock).
  *
  * - Each tab keeps its own state while you visit another (a half-written prompt, a painted mask,
  *   the Vault's scroll position), via `saveState`/`restoreState`.
@@ -67,48 +73,86 @@ fun AppNavigation(
         if (openRequest != null) onOpenRequestHandled()
     }
 
-    val items = remember {
-        Destination.entries.map { BottomBarItem(it.label, it.icon()) }
-    }
     val openSettings = remember(navController) { { navController.switchTo(Destination.Settings) } }
 
-    Column(modifier.fillMaxSize()) {
-        // Each studio applies the navigation-bar inset itself; the bar below owns it instead.
-        Box(Modifier.weight(1f).consumeWindowInsets(WindowInsets.navigationBars)) {
-            NavHost(
-                navController = navController,
-                startDestination = Destination.START.route,
-                enterTransition = { fadeIn(tween(TAB_FADE_MILLIS)) },
-                exitTransition = { fadeOut(tween(TAB_FADE_MILLIS)) },
-                popEnterTransition = { fadeIn(tween(TAB_FADE_MILLIS)) },
-                popExitTransition = { fadeOut(tween(TAB_FADE_MILLIS)) },
-            ) {
-                composable(Destination.Generate.route) { ImagineRoute(onOpenSettings = openSettings) }
-                composable(Destination.Edit.route) { EditRoute(onOpenSettings = openSettings) }
-                composable(Destination.Video.route) { VideoRoute(onOpenSettings = openSettings) }
-                composable(Destination.Vault.route) { GalleryRoute() }
-                composable(Destination.Settings.route) { SettingsRoute() }
-            }
-        }
-
-        // The keyboard owns the bottom edge while typing; the studios handle it with their own imePadding.
-        val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-        AnimatedVisibility(
-            visible = !keyboardOpen,
-            enter = fadeIn() + slideInVertically { it / 2 },
-            exit = fadeOut() + slideOutVertically { it / 2 },
+    StudioShell(current = current, onNavigate = navController::switchTo, modifier = modifier) {
+        NavHost(
+            navController = navController,
+            startDestination = Destination.START.route,
+            enterTransition = { fadeIn(tween(TAB_FADE_MILLIS)) },
+            exitTransition = { fadeOut(tween(TAB_FADE_MILLIS)) },
+            popEnterTransition = { fadeIn(tween(TAB_FADE_MILLIS)) },
+            popExitTransition = { fadeOut(tween(TAB_FADE_MILLIS)) },
         ) {
-            StudioBottomBar(
-                items = items,
-                selectedIndex = current.ordinal,
-                onSelect = { index -> navController.switchTo(Destination.entries[index]) },
-                modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            composable(Destination.Generate.route) { ImagineRoute(onOpenSettings = openSettings) }
+            composable(Destination.Edit.route) { EditRoute(onOpenSettings = openSettings) }
+            composable(Destination.Video.route) { VideoRoute(onOpenSettings = openSettings) }
+            composable(Destination.Vault.route) { GalleryRoute() }
+            composable(Destination.Settings.route) { SettingsRoute() }
         }
     }
 }
+
+/**
+ * The frame around every screen: the deep-space backdrop, the branded header card on top and the
+ * neon dock below, with Generate as the raised centre orb. The profile orb opens Settings.
+ * Header and dock step aside while the keyboard is open.
+ */
+@Composable
+internal fun StudioShell(
+    current: Destination,
+    onNavigate: (Destination) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val items = remember { BAR_ORDER.map { BottomBarItem(it.label, it.icon()) } }
+    val keyboardOpen = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+
+    StudioBackdrop(modifier = modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            AnimatedVisibility(
+                visible = !keyboardOpen,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                StudioHeader(
+                    onProfileClick = { if (current != Destination.Settings) onNavigate(Destination.Settings) },
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                )
+            }
+            // Screens apply the system-bar insets themselves; the header and the dock own them here.
+            Box(
+                Modifier
+                    .weight(1f)
+                    .then(if (keyboardOpen) Modifier else Modifier.consumeWindowInsets(WindowInsets.statusBars))
+                    .consumeWindowInsets(WindowInsets.navigationBars),
+            ) {
+                content()
+            }
+            // The keyboard owns the bottom edge while typing; the studios handle it with their own imePadding.
+            AnimatedVisibility(
+                visible = !keyboardOpen,
+                enter = fadeIn() + slideInVertically { it / 2 },
+                exit = fadeOut() + slideOutVertically { it / 2 },
+            ) {
+                StudioBottomBar(
+                    items = items,
+                    selectedIndex = BAR_ORDER.indexOf(current),
+                    onSelect = { index -> onNavigate(BAR_ORDER[index]) },
+                    centerIndex = BAR_ORDER.indexOf(Destination.Generate),
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(start = 12.dp, end = 12.dp, top = 2.dp, bottom = 8.dp),
+                )
+            }
+        }
+    }
+}
+
+/** Dock order, left to right; Generate is the centre orb. */
+private val BAR_ORDER = listOf(Destination.Vault, Destination.Edit, Destination.Generate, Destination.Video, Destination.Settings)
 
 /**
  * Top-level tab switch: pop back to the start destination (so the back stack never grows with
@@ -124,10 +168,10 @@ internal fun NavHostController.switchTo(destination: Destination) {
 
 private fun Destination.icon() = when (this) {
     Destination.Generate -> Icons.Rounded.AutoAwesome
-    Destination.Edit -> Icons.Rounded.AutoFixHigh
-    Destination.Video -> Icons.Rounded.Movie
-    Destination.Vault -> Icons.Rounded.PhotoLibrary
-    Destination.Settings -> Icons.Rounded.Tune
+    Destination.Edit -> Icons.Outlined.Edit
+    Destination.Video -> Icons.Outlined.Movie
+    Destination.Vault -> Icons.Outlined.Image
+    Destination.Settings -> Icons.Outlined.Settings
 }
 
 private const val TAB_FADE_MILLIS = 220

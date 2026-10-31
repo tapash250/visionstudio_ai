@@ -37,12 +37,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,8 +50,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -62,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.visionstudio.core.data.video.VideoJobStatus
 import com.visionstudio.core.designsystem.component.AuroraBackground
 import com.visionstudio.core.designsystem.component.EngineChip
+import com.visionstudio.core.designsystem.component.ScreenTitle
 import com.visionstudio.core.designsystem.component.GlassPanel
 import com.visionstudio.core.designsystem.component.PrismButton
 import com.visionstudio.core.designsystem.haptics.HapticPattern
@@ -212,16 +210,11 @@ fun VideoScreen(
 
 @Composable
 private fun Header(state: VideoUiState, onOpenSettings: () -> Unit, modifier: Modifier = Modifier) {
-    val prism = remember { Brush.linearGradient(listOf(StudioIndigoBright, StudioViolet, StudioCyan)) }
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.video_eyebrow).uppercase(), style = VisionStudioTheme.typography.eyebrow, color = StudioCyan)
-            Text(
-                text = "VisionStudio",
-                style = MaterialTheme.typography.headlineMedium.copy(brush = prism),
-                modifier = Modifier.semantics { heading() },
-            )
-        }
+    ScreenTitle(
+        eyebrow = stringResource(R.string.video_section),
+        title = stringResource(R.string.video_eyebrow),
+        modifier = modifier,
+    ) {
         EngineChip(
             configured = state.engineConfigured,
             label = state.engineLabel,

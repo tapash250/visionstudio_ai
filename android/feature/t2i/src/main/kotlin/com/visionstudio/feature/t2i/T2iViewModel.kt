@@ -179,7 +179,7 @@ class T2iViewModel @Inject constructor(
     private fun EngineConfig.toBadge(): EngineBadge = EngineBadge(configured = isConfigured, label = shortLabel)
 
     private fun VisionStudioException.userMessage(): String = when (this) {
-        is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in the Engine Room."
+        is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in Settings."
         is VisionStudioException.TimeoutException -> "The provider took too long to answer."
         is VisionStudioException.NetworkException -> "Can't reach the provider. Check your connection."
         is VisionStudioException.ValidationException -> message ?: "Check your engine settings."

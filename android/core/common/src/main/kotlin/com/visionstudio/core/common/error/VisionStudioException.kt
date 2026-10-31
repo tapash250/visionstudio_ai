@@ -61,6 +61,15 @@ sealed class VisionStudioException(
         cause: Throwable? = null,
     ) : VisionStudioException(message, cause)
 
+    /**
+     * The server does not speak a transport this client supports at the configured URL, for
+     * example a Streamable-HTTP-only MCP server reached with the legacy SSE transport.
+     */
+    class UnsupportedTransportException(
+        message: String,
+        cause: Throwable? = null,
+    ) : VisionStudioException(message, cause)
+
     /** A slot was used before being configured, or user input failed validation. */
     class ValidationException(
         val field: String?,

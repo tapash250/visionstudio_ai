@@ -214,7 +214,7 @@ class EditViewModel @Inject constructor(
     }
 
     private fun VisionStudioException.readable(): String = when (this) {
-        is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in the Engine Room."
+        is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in Settings."
         is VisionStudioException.TimeoutException -> "The provider took too long to answer."
         is VisionStudioException.NetworkException -> "Can't reach the provider. Check your connection."
         is VisionStudioException.ProviderException -> providerMessage ?: message ?: "The provider reported an error."

@@ -228,7 +228,7 @@ class VideoViewModel @Inject constructor(
     )
 
     private fun VisionStudioException.readable(): String = when (this) {
-        is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in the Engine Room."
+        is VisionStudioException.AuthenticationException -> "The provider rejected your API key. Re-verify it in Settings."
         is VisionStudioException.NetworkException -> "Can't reach the provider. Check your connection."
         else -> message ?: "Something went wrong."
     }

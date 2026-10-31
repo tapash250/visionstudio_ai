@@ -51,7 +51,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -59,8 +58,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -75,7 +72,6 @@ import com.visionstudio.core.designsystem.component.OrbState
 import com.visionstudio.core.designsystem.component.PrismButton
 import com.visionstudio.core.designsystem.component.PrismSegmentedControl
 import com.visionstudio.core.designsystem.component.SectionHeader
-import com.visionstudio.core.designsystem.component.StatusOrb
 import com.visionstudio.core.designsystem.haptics.HapticPattern
 import com.visionstudio.core.designsystem.haptics.rememberStudioHaptics
 import com.visionstudio.core.designsystem.haptics.tactileClickable
@@ -89,13 +85,35 @@ import com.visionstudio.core.designsystem.theme.StudioShapes
 import com.visionstudio.core.designsystem.theme.StudioSuccess
 import com.visionstudio.core.designsystem.theme.StudioTextSecondary
 import com.visionstudio.core.designsystem.theme.StudioTextTertiary
-import com.visionstudio.core.designsystem.theme.StudioViolet
 import com.visionstudio.core.designsystem.theme.StudioWarning
 import com.visionstudio.core.designsystem.theme.VisionStudioTheme
 import com.visionstudio.core.model.AuthScheme
 import com.visionstudio.core.model.EngineSlot
 import com.visionstudio.core.model.ProviderProtocol
 import com.visionstudio.core.model.RestDialect
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.MovieCreation
+import androidx.compose.material.icons.rounded.Password
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.visionstudio.core.designsystem.component.NeonIconTile
+import com.visionstudio.core.designsystem.component.ScreenTitle
+import com.visionstudio.core.designsystem.component.SegmentStyle
+import com.visionstudio.core.designsystem.modifier.gradientTint
+import com.visionstudio.core.designsystem.modifier.hudFrame
+import com.visionstudio.core.designsystem.theme.NeonBrushes
 import kotlinx.coroutines.delay
 
 @Composable
@@ -138,9 +156,9 @@ fun SettingsScreen(
                 .navigationBarsPadding()
                 .imePadding()
                 .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Hero(Modifier.staggeredEntrance(0))
 
             AnimatedVisibility(
@@ -157,7 +175,7 @@ fun SettingsScreen(
                 onSelect = { onIntent(SettingsIntent.SelectSlot(it)) },
                 label = { slotLabel(it) },
                 icon = { slotIcon(it) },
-                height = 52.dp,
+                height = 58.dp,
                 modifier = Modifier.staggeredEntrance(1),
             )
 
@@ -207,24 +225,12 @@ fun SettingsScreen(
 
 @Composable
 private fun Hero(modifier: Modifier = Modifier) {
-    val prismText = remember { Brush.linearGradient(listOf(StudioIndigoBright, StudioViolet, StudioCyan)) }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = stringResource(R.string.settings_eyebrow).uppercase(),
-            style = VisionStudioTheme.typography.eyebrow,
-            color = StudioCyan,
-        )
-        Text(
-            text = stringResource(R.string.settings_title),
-            style = VisionStudioTheme.typography.hero.copy(brush = prismText),
-            modifier = Modifier.semantics { heading() },
-        )
-        Text(
-            text = stringResource(R.string.settings_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = StudioTextSecondary,
-        )
-    }
+    ScreenTitle(
+        eyebrow = stringResource(R.string.settings_eyebrow),
+        title = stringResource(R.string.settings_title),
+        subtitle = stringResource(R.string.settings_subtitle),
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -253,21 +259,45 @@ private fun SlotStatusCard(state: SettingsUiState, modifier: Modifier = Modifier
         OrbState.Idle -> if (draft.dirty) StudioWarning else StudioTextTertiary
     }
 
+    val statusIcon = when (orb) {
+        OrbState.Success -> Icons.Rounded.CheckCircle
+        OrbState.Failure -> Icons.Rounded.ErrorOutline
+        OrbState.Working -> Icons.Rounded.Sync
+        OrbState.Idle -> Icons.Rounded.RadioButtonUnchecked
+    }
+    val tileTint = when (orb) {
+        OrbState.Idle -> if (draft.dirty) StudioWarning else StudioIndigoBright
+        else -> statusColor
+    }
+
     GlassPanel(
         modifier = modifier.fillMaxWidth(),
+        shape = StudioShapes.Card,
         glowing = orb == OrbState.Success || orb == OrbState.Working,
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp, vertical = 16.dp),
+        glowIntensity = { 0.8f },
+        contentPadding = PaddingValues(start = 14.dp, end = 12.dp, top = 14.dp, bottom = 14.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            StatusOrb(state = orb, size = 48.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            NeonIconTile(icon = slotTileIcon(draft.slot), tint = tileTint, size = 62.dp)
+            Box(
+                Modifier
+                    .width(1.dp)
+                    .height(52.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, StudioCyan.copy(alpha = 0.6f), Color.Transparent))),
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = draft.slot.displayName,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 AnimatedContent(targetState = status, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "status") {
-                    Text(text = it, style = MaterialTheme.typography.labelMedium, color = statusColor)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(statusIcon, contentDescription = null, tint = statusColor, modifier = Modifier.size(16.dp))
+                        Text(text = it, style = MaterialTheme.typography.labelMedium, color = statusColor, maxLines = 1)
+                    }
                 }
             }
             ProtocolTag(draft)
@@ -278,18 +308,44 @@ private fun SlotStatusCard(state: SettingsUiState, modifier: Modifier = Modifier
 @Composable
 private fun ProtocolTag(draft: SlotDraft) {
     val label = if (draft.protocol.isMcp) "MCP" else when (draft.restDialect) {
-        RestDialect.OPENAI_COMPATIBLE -> "REST · OAI"
-        RestDialect.FAL_QUEUE -> "REST · FAL"
-        RestDialect.CUSTOM -> "REST · JSON"
+        RestDialect.OPENAI_COMPATIBLE -> "REST • OAI"
+        RestDialect.FAL_QUEUE -> "REST • FAL"
+        RestDialect.CUSTOM -> "REST • JSON"
     }
-    Text(
-        text = label,
-        style = VisionStudioTheme.typography.monoSmall,
-        color = StudioIndigoBright,
+    Row(
         modifier = Modifier
-            .frostedGlass(shape = StudioShapes.Chip, border = SolidColor(StudioIndigoBright.copy(alpha = 0.35f)))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-    )
+            .glowingBorder(SolidColor(StudioCyan), StudioShapes.Chip, width = 1.3.dp, glowRadius = 6.dp, intensity = { 0.7f })
+            .frostedGlass(shape = StudioShapes.Chip, fill = TAG_FILL, border = SolidColor(Color.Transparent))
+            .padding(start = 12.dp, end = 6.dp, top = 7.dp, bottom = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1)
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** A HUD card holding related inputs, with a large gradient glyph at its start (the "Connection" card). */
+@Composable
+private fun FieldPanel(icon: ImageVector, content: @Composable () -> Unit) {
+    GlassPanel(
+        modifier = Modifier.fillMaxWidth(),
+        shape = StudioShapes.Card,
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 16.dp, bottom = 16.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .padding(top = 2.dp)
+                    .size(30.dp)
+                    .gradientTint(NeonBrushes.GlyphCool),
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) { content() }
+        }
+    }
 }
 
 @Composable
@@ -309,6 +365,9 @@ private fun SlotForm(
             onSelect = { onIntent(SettingsIntent.SetProtocol(it)) },
             label = { if (it.isMcp) stringResource(R.string.protocol_mcp) else stringResource(R.string.protocol_rest) },
             icon = { if (it.isMcp) Icons.Rounded.Hub else Icons.Rounded.Cloud },
+            height = 62.dp,
+            style = SegmentStyle.Options,
+            cycleChevron = true,
         )
 
         AnimatedContent(
@@ -327,10 +386,14 @@ private fun SlotForm(
                         selected = draft.restDialect,
                         onSelect = { onIntent(SettingsIntent.SetDialect(it)) },
                         label = { dialectLabel(it) },
-                        height = 44.dp,
+                        height = 58.dp,
+                        style = SegmentStyle.Options,
+                        leadingIcon = Icons.Rounded.Code,
+                        cycleChevron = true,
                     )
                 }
                 SectionHeader(stringResource(R.string.section_connection))
+                FieldPanel(icon = Icons.Rounded.Link) {
                 GlowTextField(
                     value = draft.endpointUrl,
                     onValueChange = edit(SettingsField.Endpoint),
@@ -339,7 +402,9 @@ private fun SlotForm(
                     supportingText = errors[SettingsField.Endpoint] ?: if (protocol.isMcp) stringResource(R.string.support_mcp) else null,
                     isError = SettingsField.Endpoint in errors,
                     mono = true,
-                    leadingIcon = Icons.Rounded.Link,
+                    wrap = true,
+                    copyable = true,
+                    leadingIcon = Icons.Rounded.Language,
                     keyboardType = KeyboardType.Uri,
                     enabled = enabled,
                 )
@@ -352,6 +417,7 @@ private fun SlotForm(
                         supportingText = errors[SettingsField.Tool],
                         isError = SettingsField.Tool in errors,
                         mono = true,
+                        wrap = true,
                         leadingIcon = Icons.Rounded.Construction,
                         enabled = enabled,
                     )
@@ -364,9 +430,12 @@ private fun SlotForm(
                     supportingText = errors[SettingsField.Model],
                     isError = SettingsField.Model in errors,
                     mono = true,
+                    wrap = true,
+                    copyable = true,
                     leadingIcon = Icons.Rounded.Memory,
                     enabled = enabled,
                 )
+                }
             }
         }
 
@@ -376,7 +445,9 @@ private fun SlotForm(
             selected = draft.authScheme,
             onSelect = { onIntent(SettingsIntent.SetAuthScheme(it)) },
             label = { authLabel(it) },
-            height = 44.dp,
+            height = 58.dp,
+            style = SegmentStyle.Options,
+            leadingIcon = Icons.Rounded.VpnKey,
         )
         AnimatedVisibility(
             visible = draft.authScheme == AuthScheme.CUSTOM_HEADER,
@@ -404,6 +475,7 @@ private fun SlotForm(
                 SectionHeader(stringResource(R.string.section_credentials)) {
                     Icon(Icons.Rounded.Shield, contentDescription = null, tint = StudioSuccess, modifier = Modifier.size(16.dp))
                 }
+                FieldPanel(icon = Icons.Rounded.Key) {
                 GlowTextField(
                     value = draft.apiKeyInput,
                     onValueChange = edit(SettingsField.ApiKey),
@@ -415,10 +487,11 @@ private fun SlotForm(
                     isError = SettingsField.ApiKey in errors,
                     secret = true,
                     mono = true,
-                    leadingIcon = Icons.Rounded.Key,
+                    leadingIcon = Icons.Rounded.Password,
                     imeAction = ImeAction.Done,
                     enabled = enabled,
                 )
+                }
             }
         }
     }
@@ -442,8 +515,7 @@ private fun ProbeResultPanel(probe: ProbeUiState) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .glowingBorder(SolidColor(accent), StudioShapes.Card, width = 1.dp, glowRadius = 8.dp, intensity = { 0.6f })
-                .frostedGlass(shape = StudioShapes.Card)
+                .hudFrame(shape = StudioShapes.Card, border = SolidColor(accent), glow = { 0.6f })
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -513,8 +585,7 @@ private fun RecoveryBanner(onDismiss: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .glowingBorder(SolidColor(StudioWarning), StudioShapes.Card, width = 1.dp, glowRadius = 6.dp, intensity = { 0.5f })
-            .frostedGlass(shape = StudioShapes.Card)
+            .hudFrame(shape = StudioShapes.Card, border = SolidColor(StudioWarning), glow = { 0.5f })
             .padding(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -568,9 +639,17 @@ private fun slotLabel(slot: EngineSlot): String = stringResource(
 
 private fun slotIcon(slot: EngineSlot): ImageVector = when (slot) {
     EngineSlot.TEXT_TO_IMAGE -> Icons.Rounded.AutoAwesome
-    EngineSlot.IMAGE_EDIT -> Icons.Rounded.AutoFixHigh
+    EngineSlot.IMAGE_EDIT -> Icons.Rounded.Edit
     EngineSlot.VIDEO_STUDIO -> Icons.Rounded.Movie
 }
+
+private fun slotTileIcon(slot: EngineSlot): ImageVector = when (slot) {
+    EngineSlot.TEXT_TO_IMAGE -> Icons.Rounded.Image
+    EngineSlot.IMAGE_EDIT -> Icons.Rounded.AutoFixHigh
+    EngineSlot.VIDEO_STUDIO -> Icons.Rounded.MovieCreation
+}
+
+private val TAG_FILL = Color(0xE0081040)
 
 @Composable
 private fun dialectLabel(dialect: RestDialect): String = stringResource(
@@ -616,7 +695,7 @@ private fun modelHint(draft: SlotDraft): String {
 
 private const val SAVED_TOAST_MILLIS = 2_400L
 
-@Preview(showBackground = true, backgroundColor = 0xFF0A0B0E, heightDp = 1500)
+@Preview(showBackground = true, backgroundColor = 0xFF03061A, heightDp = 1500)
 @Composable
 private fun SettingsScreenPreview() {
     VisionStudioTheme {

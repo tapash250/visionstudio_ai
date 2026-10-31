@@ -7,6 +7,7 @@ import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
@@ -73,16 +74,29 @@ data class StudioTypography(
     val monoSmall: TextStyle,
     /** Uppercase section eyebrows ("ENGINE", "ASPECT RATIO"). */
     val eyebrow: TextStyle,
+    /** Neon section headers ("PROTOCOL", "CONNECTION"). */
+    val section: TextStyle,
+    /** The "Vision Studio" word mark. */
+    val brand: TextStyle,
     /** Large progress percentage readout during generation. */
     val progressNumeral: TextStyle,
 )
 
 val ObsidianStudioTypography = StudioTypography(
-    hero = TextStyle(fontFamily = Display, fontWeight = FontWeight.Bold, fontSize = 42.sp, lineHeight = 44.sp, letterSpacing = (-0.04).em),
+    hero = TextStyle(
+        fontFamily = Display,
+        fontWeight = FontWeight.Bold,
+        fontStyle = FontStyle.Italic,
+        fontSize = 54.sp,
+        lineHeight = 60.sp,
+        letterSpacing = (-0.03).em,
+    ),
     prompt = TextStyle(fontFamily = Body, fontWeight = FontWeight.Normal, fontSize = 17.sp, lineHeight = 26.sp),
     mono = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = (-0.01).em),
     monoSmall = TextStyle(fontFamily = Mono, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 14.sp),
-    eyebrow = TextStyle(fontFamily = Body, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.18.em),
+    eyebrow = TextStyle(fontFamily = Body, fontWeight = FontWeight.Bold, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.12.em),
+    section = TextStyle(fontFamily = Display, fontWeight = FontWeight.Bold, fontSize = 15.sp, lineHeight = 18.sp, letterSpacing = 0.06.em),
+    brand = TextStyle(fontFamily = Display, fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 26.sp, letterSpacing = (-0.01).em),
     progressNumeral = TextStyle(fontFamily = Display, fontWeight = FontWeight.Light, fontSize = 48.sp, lineHeight = 52.sp, letterSpacing = (-0.04).em),
 )
 
