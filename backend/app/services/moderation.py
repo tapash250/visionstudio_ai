@@ -1,6 +1,6 @@
 import os
-import re
 from dataclasses import dataclass
+
 
 @dataclass
 class ModerationResult:
@@ -33,7 +33,7 @@ class ModerationService:
             if term in prompt_lower:
                 return ModerationResult(
                     blocked=True,
-                    reason=f"Content violates safety policy",
+                    reason="Content violates safety policy",
                     score=1.0,
                     categories=["blocked_term"],
                 )

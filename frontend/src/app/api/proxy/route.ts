@@ -1,51 +1,54 @@
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const path = searchParams.get('path') || '';
+import { resolveTarget } from '@/lib/proxy-target';
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+function forwardHeaders(request: Request, json: boolean): HeadersInit {
+  const headers: Record<string, string> = {};
+  const auth = request.headers.get('Authorization');
+  if (auth) headers['Authorization'] = auth;
+  if (json) headers['Content-Type'] = 'application/json';
+  return headers;
+}
+
+async function relay(response: Response) {
+  const data = await response.json().catch(() => ({ error: 'Invalid response from API' }));
+  return NextResponse.json(data, { status: response.status });
+}
+
+export async function GET(request: Request) {
+  const target = resolveTarget(new URL(request.url).searchParams.get('path'));
+  if (!target) return NextResponse.json({ error: 'Path not allowed' }, { status: 400 });
 
   try {
-    const response = await fetch(`${apiUrl}${path}`, {
-      headers: {
-        'Authorization': request.headers.get('Authorization') || '',
-      },
-    });
-
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to fetch from API' },
-      { status: 500 }
+    return await relay(
+      await fetch(target, { headers: forwardHeaders(request, false), redirect: 'manual' }),
     );
+  } catch {
+    return NextResponse.json({ error: 'Failed to fetch from API' }, { status: 502 });
   }
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const { searchParams } = new URL(request.url);
-  const path = searchParams.get('path') || '';
+  const target = resolveTarget(new URL(request.url).searchParams.get('path'));
+  if (!target) return NextResponse.json({ error: 'Path not allowed' }, { status: 400 });
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
 
   try {
-    const response = await fetch(`${apiUrl}${path}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': request.headers.get('Authorization') || '',
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
-  } catch (error) {
-    return NextResponse.json(
-      { error: 'Failed to post to API' },
-      { status: 500 }
+    return await relay(
+      await fetch(target, {
+        method: 'POST',
+        headers: forwardHeaders(request, true),
+        body: JSON.stringify(body),
+        redirect: 'manual',
+      }),
     );
+  } catch {
+    return NextResponse.json({ error: 'Failed to post to API' }, { status: 502 });
   }
 }

@@ -9,3 +9,8 @@ data:
   MAX_UPLOAD_SIZE: "50"
   RATE_LIMIT_RPM: "60"
   MODERATION_ENABLED: "true"
+  ALLOWED_HOSTS: "visionstudio.app,www.visionstudio.app,api.visionstudio.app"
+  # Hosts that sourceUrl/maskUrl/audioUrl may point at (R2_PUBLIC_URL's host is added automatically).
+  ALLOWED_MEDIA_HOSTS: "media.visionstudio.app"
+  # Number of reverse proxies (ingress) in front of the API that append X-Forwarded-For.
+  TRUSTED_PROXY_COUNT: "1"

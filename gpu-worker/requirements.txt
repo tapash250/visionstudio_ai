@@ -1,0 +1,10 @@
+# GPU worker runtime deps (torch is installed separately from the CUDA wheel index).
+diffusers==0.42.1
+transformers==4.57.6
+accelerate==1.15.0
+pillow==13.0.0
+httpx==0.28.1
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+boto3==1.43.123
+pydantic==2.14.2

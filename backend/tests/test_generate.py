@@ -1,8 +1,11 @@
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.database import get_db
 from app.main import app
 from app.routers.auth import get_current_user
+
 
 class TestGeneration:
     @pytest.fixture
@@ -52,7 +55,17 @@ class TestGeneration:
 
 class TestStyles:
     def test_get_styles(self, api_client):
-        response = api_client.get("/api/styles/")
+        db = AsyncMock()
+        db.execute.return_value = MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: [])))
+
+        async def _get_db():
+            yield db
+
+        app.dependency_overrides[get_db] = _get_db
+        try:
+            response = api_client.get("/api/styles/")
+        finally:
+            app.dependency_overrides.pop(get_db, None)
         assert response.status_code == 200
         data = response.json()
         assert "styles" in data

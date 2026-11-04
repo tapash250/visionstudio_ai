@@ -1,68 +1,44 @@
-import uuid
+import os
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from unittest.mock import AsyncMock
+# Configure the app before it is imported: the JWT secret is mandatory and media URLs are
+# only accepted from allowlisted hosts.
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key-that-is-long-enough-0123456789")
+os.environ.setdefault("ALLOWED_MEDIA_HOSTS", "media.example.com")
+os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000")
 
-from app.main import app
-from app.database import get_db, Base
+import fakeredis  # noqa: E402
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-# Test database
-TEST_DATABASE_URL = "postgresql+asyncpg://test:test@localhost:5432/test"
+import app.main as main_module  # noqa: E402
+from app.main import app  # noqa: E402
 
-test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-TestingSessionLocal = sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
-@pytest.fixture(scope="session")
-def event_loop():
-    import asyncio
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(autouse=True)
+def fake_redis(monkeypatch):
+    """Each test gets an empty in-memory Redis, so rate-limit buckets never leak between tests."""
+    client = fakeredis.FakeAsyncRedis(decode_responses=True)
+    monkeypatch.setattr(main_module, "redis_client", client)
+    monkeypatch.setattr(main_module.rate_limiter, "redis", client)
+    return client
 
-@pytest.fixture(scope="session", autouse=True)
-async def setup_database():
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
-@pytest.fixture
-async def db_session():
-    async with TestingSessionLocal() as session:
-        yield session
-        await session.rollback()
+@pytest.fixture(autouse=True)
+def no_celery(monkeypatch):
+    """Record queued jobs instead of talking to a broker."""
+    sent: list[tuple[str, list]] = []
 
-@pytest.fixture
-def client(db_session):
-    async def override_get_db():
-        yield db_session
+    def fake_send_task(name, args=None, **kwargs):
+        sent.append((name, args))
 
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+    from app.workers.celery_app import celery_app
+
+    monkeypatch.setattr(celery_app, "send_task", fake_send_task)
+    return sent
+
 
 @pytest.fixture
 def api_client():
-    """In-process client for tests that mock their own dependencies.
-
-    Used as a context manager so every request in a test shares one event loop (the app's
-    Redis connection pool is bound to the loop it was first used on) and the app's lifespan
-    runs. A fresh device id gives each test its own rate-limit bucket, so reruns within the
-    limiter's 60-second window can't trip the limit.
-    """
-    with TestClient(app, headers={"x-device-id": f"pytest-{uuid.uuid4()}"}) as test_client:
+    """In-process client; used as a context manager so the app's lifespan runs."""
+    with TestClient(app) as test_client:
         yield test_client
-
-@pytest.fixture
-def mock_user():
-    return {
-        "id": "test-user-id",
-        "email": "test@example.com",
-        "name": "Test User",
-        "mature_enabled": False,
-    }

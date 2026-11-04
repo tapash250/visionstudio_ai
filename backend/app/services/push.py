@@ -1,6 +1,8 @@
+import json
 import os
+
 import httpx
-from typing import List
+
 
 class PushNotificationService:
     def __init__(self):
@@ -12,7 +14,7 @@ class PushNotificationService:
     async def send_webpush(self, subscription: dict, payload: dict):
         """Send Web Push notification using VAPID"""
         try:
-            from pywebpush import webpush, WebPushException
+            from pywebpush import webpush
 
             webpush(
                 subscription_info=subscription,
@@ -27,7 +29,7 @@ class PushNotificationService:
             print(f"WebPush failed: {e}")
             return False
 
-    async def send_fcm(self, tokens: List[str], payload: dict):
+    async def send_fcm(self, tokens: list[str], payload: dict):
         """Send via Firebase Cloud Messaging"""
         if not self.fcm_server_key:
             return False
@@ -59,15 +61,16 @@ class PushNotificationService:
 
     async def notify_job_complete(self, user_id: str, job_type: str, result_url: str = None):
         """Send notification when job completes"""
-        from app.database import async_session
         from sqlalchemy import select
+
+        from app.database import async_session
         from app.models import Device
 
         async with async_session() as db:
             result = await db.execute(
                 select(Device).where(
                     Device.user_id == user_id,
-                    Device.push_enabled == True
+                    Device.push_enabled.is_(True)
                 )
             )
             devices = result.scalars().all()
@@ -81,7 +84,7 @@ class PushNotificationService:
             payload = {
                 "title": "VisionStudio AI",
                 "body": f"Your {type_labels.get(job_type, 'creation')} is ready!",
-                "url": f"/projects",
+                "url": "/projects",
                 "data": {
                     "jobType": job_type,
                     "resultUrl": result_url,
@@ -94,8 +97,6 @@ class PushNotificationService:
                     try:
                         subscription = json.loads(device.push_token)
                         await self.send_webpush(subscription, payload)
-                    except:
+                    except Exception:
                         # Fallback to FCM if token format is different
                         pass
-
-import json

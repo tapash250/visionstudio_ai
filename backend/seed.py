@@ -9,11 +9,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import async_session, init_db
 from app.models import StylePreset, User
-from passlib.context import CryptContext
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.security import hash_password
 
 STYLE_PRESETS = [
     {
@@ -156,22 +155,37 @@ async def seed_styles(db: AsyncSession):
     await db.commit()
 
 async def seed_admin(db: AsyncSession):
-    """Seed admin user."""
+    """Seed an admin user from SEED_ADMIN_EMAIL / SEED_ADMIN_PASSWORD (skipped if unset).
+
+    There is deliberately no default password: a well-known admin credential would be an
+    instant takeover on any deployment that ran the seed.
+    """
     from sqlalchemy import select
 
-    result = await db.execute(select(User).where(User.email == "admin@visionstudio.app"))
+    email = os.getenv("SEED_ADMIN_EMAIL", "").strip().lower()
+    password = os.getenv("SEED_ADMIN_PASSWORD", "")
+    if not email or len(password) < 12:
+        print("  ⏭️  Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD (12+ chars) to seed an admin")
+        return
+
+    result = await db.execute(select(User).where(User.email == email))
     existing = result.scalar_one_or_none()
 
     if not existing:
         admin = User(
-            email="admin@visionstudio.app",
-            password_hash=pwd_context.hash("admin123"),
+            email=email,
+            password_hash=hash_password(password),
             name="Admin",
             trust_score=100,
+            is_admin=True,
         )
         db.add(admin)
         await db.commit()
-        print("  ✅ Created admin user: admin@visionstudio.app / admin123")
+        print(f"  ✅ Created admin user: {email}")
+    elif not existing.is_admin:
+        existing.is_admin = True
+        await db.commit()
+        print(f"  ✅ Granted admin to existing user: {email}")
     else:
         print("  ⏭️  Admin user exists")
 
