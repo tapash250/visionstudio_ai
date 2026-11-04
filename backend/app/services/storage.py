@@ -1,6 +1,7 @@
-import boto3
 import os
-from typing import Optional
+
+import boto3
+
 
 class StorageService:
     def __init__(self):

@@ -46,3 +46,6 @@ coverage/
 *.pem
 *.key
 *.crt
+
+# Real Kubernetes secrets (use k8s/secret.example.yaml as the template)
+k8s/secret.yaml

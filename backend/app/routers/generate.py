@@ -1,31 +1,25 @@
-from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from celery import Celery
-import os
-import uuid
 
 from app.database import get_db
-from app.models import User, GenerationJob, Project
+from app.models import GenerationJob, Project, User
 from app.routers.auth import get_current_user
-from app.services.storage import StorageService
+from app.schemas import EnhanceRequest, GenerateRequest
 from app.services.moderation import ModerationService
+from app.workers.celery_app import GENERATE_TASK, enqueue
 
 router = APIRouter()
-storage = StorageService()
 moderation = ModerationService()
 
-celery_app = Celery("visionstudio", broker=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
 
 @router.post("/")
 async def create_generation(
-    data: dict,
-    background_tasks: BackgroundTasks,
+    data: GenerateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    prompt = data.get("prompt", "").strip()
-    if not prompt:
-        raise HTTPException(status_code=400, detail="Prompt is required")
+    prompt = data.prompt
 
     # Moderation check
     mod_result = await moderation.check_prompt(prompt)
@@ -47,14 +41,14 @@ async def create_generation(
         project_id=project.id,
         user_id=current_user.id,
         prompt=prompt,
-        negative_prompt=data.get("negativePrompt", ""),
-        model=data.get("model", "flux-dev"),
-        style=data.get("style"),
-        aspect_ratio=data.get("aspectRatio", "9:16"),
-        seed=data.get("seed"),
-        steps=data.get("steps", 30),
-        cfg_scale=data.get("cfgScale", 7.5),
-        batch_size=data.get("batchSize", 1),
+        negative_prompt=data.negative_prompt,
+        model=data.model,
+        style=data.style,
+        aspect_ratio=data.aspect_ratio,
+        seed=data.seed,
+        steps=data.steps,
+        cfg_scale=data.cfg_scale,
+        batch_size=data.batch_size,
         status="QUEUED",
         priority=5,
     )
@@ -62,7 +56,7 @@ async def create_generation(
     await db.commit()
 
     # Queue GPU worker
-    celery_app.send_task("tasks.generate_image", args=[job.id], queue="generation")
+    enqueue(GENERATE_TASK, job.id)
 
     return {"jobId": job.id, "status": "QUEUED"}
 
@@ -72,7 +66,6 @@ async def get_generation_status(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from sqlalchemy import select
     result = await db.execute(
         select(GenerationJob).where(
             GenerationJob.id == job_id,
@@ -92,10 +85,10 @@ async def get_generation_status(
 
 @router.post("/enhance")
 async def enhance_prompt(
-    data: dict,
+    data: EnhanceRequest,
     current_user: User = Depends(get_current_user),
 ):
-    prompt = data.get("prompt", "").strip()
+    prompt = data.prompt.strip()
     if not prompt:
         raise HTTPException(status_code=400, detail="Prompt required")
 

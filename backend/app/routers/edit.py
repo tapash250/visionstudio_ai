@@ -1,29 +1,30 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
-import os
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import User, EditJob, Project
+from app.models import EditJob, Project, User
 from app.routers.auth import get_current_user
-from app.services.storage import StorageService
+from app.schemas import EditRequest
 from app.services.moderation import ModerationService
+from app.workers.celery_app import EDIT_TASK, enqueue
 
 router = APIRouter()
-storage = StorageService()
 moderation = ModerationService()
 
 @router.post("/")
 async def create_edit(
-    data: dict,
+    data: EditRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    source_url = data.get("sourceUrl")
-    operation = data.get("operation")
+    source_url = data.source_url
+    operation = data.operation
 
-    if not source_url or not operation:
-        raise HTTPException(status_code=400, detail="Source and operation required")
+    if data.prompt:
+        mod_result = await moderation.check_prompt(data.prompt)
+        if mod_result.blocked:
+            raise HTTPException(status_code=400, detail=f"Content blocked: {mod_result.reason}")
 
     # Create project
     project = Project(
@@ -41,19 +42,16 @@ async def create_edit(
         user_id=current_user.id,
         source_url=source_url,
         operation=operation,
-        prompt=data.get("prompt"),
-        mask_url=data.get("maskUrl"),
-        strength=data.get("strength", 0.75),
-        preserve_face=data.get("preserveFace", True),
+        prompt=data.prompt,
+        mask_url=data.mask_url,
+        strength=data.strength,
+        preserve_face=data.preserve_face,
         status="QUEUED",
     )
     db.add(job)
     await db.commit()
 
-    # Queue worker
-    from celery import Celery
-    celery_app = Celery("visionstudio", broker=os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-    celery_app.send_task("tasks.edit_image", args=[job.id], queue="editing")
+    enqueue(EDIT_TASK, job.id)
 
     return {"jobId": job.id}
 

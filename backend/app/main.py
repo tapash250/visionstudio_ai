@@ -1,17 +1,18 @@
-from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, BackgroundTasks
+import logging
+import os
+import time
+from contextlib import asynccontextmanager
+
+import redis.asyncio as redis
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from contextlib import asynccontextmanager
-import redis.asyncio as redis
-import os
-import time
-import logging
 
-from app.routers import auth, generate, edit, animate, projects, upload, admin, styles, websocket
-from app.services.rate_limiter import RateLimiter
+from app import config
+from app.routers import admin, animate, auth, edit, generate, projects, styles, upload, websocket
 from app.services.moderation import ModerationService
+from app.services.rate_limiter import RateLimiter, client_ip
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,10 +30,11 @@ moderation = ModerationService()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("VisionStudio API starting up...")
+    config.jwt_secret()  # fail fast on a missing or weak signing key
     await redis_client.ping()
     logger.info("Redis connected")
     yield
-    await redis_client.close()
+    await redis_client.aclose()
     logger.info("VisionStudio API shutting down...")
 
 app = FastAPI(
@@ -47,23 +49,33 @@ app = FastAPI(
 # Security middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_origins=config.cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=config.allowed_hosts())
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    if config.is_production():
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+        )
+    return response
 
 # Request timing & logging
 @app.middleware("http")
 async def add_process_time_header(request: Request, call_next):
     start = time.time()
 
-    # request.client is None when the peer address is unknown (Unix sockets, some proxies, tests).
-    client_host = request.client.host if request.client else "unknown"
-    client_id = request.headers.get("x-device-id") or client_host
-    if not await rate_limiter.check(client_id, request.url.path):
+    if not await rate_limiter.check(client_ip(request), request.url.path):
         return JSONResponse(
             status_code=429,
             content={"detail": "Rate limit exceeded. Please try again later."},
@@ -73,7 +85,9 @@ async def add_process_time_header(request: Request, call_next):
     duration = time.time() - start
     response.headers["X-Process-Time"] = str(duration)
 
-    logger.info(f"{request.method} {request.url.path} — {response.status_code} — {duration:.3f}s")
+    logger.info(
+        "%s %s — %s — %.3fs", request.method, request.url.path, response.status_code, duration
+    )
     return response
 
 # Error handlers
@@ -86,7 +100,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    logger.error("Unhandled exception on %s", request.url.path, exc_info=exc)
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "status": "error"},
@@ -114,4 +128,4 @@ app.include_router(websocket.router, prefix="", tags=["WebSocket"])
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"), port=8000)

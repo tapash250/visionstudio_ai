@@ -12,11 +12,15 @@ RUN apt-get update && apt-get install -y \
 # Install PyTorch with CUDA
 RUN pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 
-# Install diffusers and other ML libs
-RUN pip3 install diffusers transformers accelerate xformers pillow httpx fastapi uvicorn boto3
+# Install diffusers and other ML libs (pinned)
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt xformers
 
-# Copy worker code
+# Copy worker code and drop root
 COPY main.py .
+RUN useradd --create-home --uid 10001 worker && mkdir -p /app/cache && chown -R worker /app
+USER worker
+ENV HF_HOME=/app/cache
 
 EXPOSE 8001
 

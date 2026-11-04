@@ -252,7 +252,7 @@ output/
     hpa.yaml
     ingress.yaml
     namespace.yaml
-    secret.yaml
+    secret.example.yaml
   docker/
     docker-compose.yml
     nginx.conf

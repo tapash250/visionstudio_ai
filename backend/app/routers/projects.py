@@ -1,17 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
-from typing import Optional
 
 from app.database import get_db
-from app.models import User, Project
+from app.models import Project, User
 from app.routers.auth import get_current_user
+from app.schemas import ProjectUpdateRequest
 
 router = APIRouter()
 
 @router.get("/")
 async def list_projects(
-    type: Optional[str] = None,
+    type: str | None = None,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -76,7 +76,7 @@ async def get_project(
 @router.post("/{project_id}")
 async def update_project(
     project_id: str,
-    data: dict,
+    data: ProjectUpdateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -87,16 +87,14 @@ async def update_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    if "title" in data:
-        project.title = data["title"]
-    if "description" in data:
-        project.description = data["description"]
-    if "isPublic" in data:
-        project.is_public = data["isPublic"]
-    if "isMature" in data:
-        project.is_mature = data["isMature"]
-    if "tags" in data:
-        project.tags = data["tags"]
+    updates = data.model_dump(exclude_unset=True)
+    for field in ("title", "description", "is_public", "tags"):
+        if field in updates:
+            setattr(project, field, updates[field])
+    if "is_mature" in updates:
+        if updates["is_mature"] and not current_user.mature_enabled:
+            raise HTTPException(status_code=403, detail="Mature content consent required")
+        project.is_mature = updates["is_mature"]
 
     await db.commit()
     await db.refresh(project)

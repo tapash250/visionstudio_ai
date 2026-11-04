@@ -30,6 +30,8 @@ spec:
         envFrom:
         - secretRef:
             name: visionstudio-secrets
+        - configMapRef:
+            name: visionstudio-config
         resources:
           limits:
             nvidia.com/gpu: 1

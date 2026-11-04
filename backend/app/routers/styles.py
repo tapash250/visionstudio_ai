@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import StylePreset
@@ -17,7 +17,7 @@ async def get_styles(
     if category:
         query = query.where(StylePreset.category == category)
     if not include_mature:
-        query = query.where(StylePreset.is_mature == False)
+        query = query.where(StylePreset.is_mature.is_(False))
 
     result = await db.execute(query)
     styles = result.scalars().all()

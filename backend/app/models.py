@@ -1,10 +1,22 @@
-from sqlalchemy import Column, String, DateTime, Boolean, Integer, Float, Text, ARRAY, JSON, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 import uuid
 from datetime import datetime
 
+from sqlalchemy import (
+    ARRAY,
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.orm import relationship
+
 from app.database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -21,6 +33,8 @@ class User(Base):
     language = Column(String, default="en")
 
     mature_enabled = Column(Boolean, default=False)
+    # Granted explicitly (migration 002 / seed / SQL); never derived from the email address.
+    is_admin = Column(Boolean, default=False, nullable=False, server_default="false")
     trust_score = Column(Integer, default=100)
     banned_at = Column(DateTime, nullable=True)
     ban_reason = Column(String, nullable=True)

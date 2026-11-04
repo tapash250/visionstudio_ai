@@ -26,7 +26,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?set JWT_SECRET_KEY}
+      - GPU_WORKER_TOKEN=${GPU_WORKER_TOKEN:?set GPU_WORKER_TOKEN}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - ALLOWED_MEDIA_HOSTS=${ALLOWED_MEDIA_HOSTS:-}
       - STORAGE_PROVIDER=r2
       - ENV=production
     depends_on:
@@ -46,6 +50,7 @@ services:
       - DATABASE_URL=postgresql+asyncpg://visionstudio:visionstudio@db:5432/visionstudio
       - REDIS_URL=redis://redis:6379/0
       - GPU_WORKER_URL=http://gpu-worker:8001
+      - GPU_WORKER_TOKEN=${GPU_WORKER_TOKEN:?set GPU_WORKER_TOKEN}
     depends_on:
       - db
       - redis
@@ -60,8 +65,11 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - CUDA_VISIBLE_DEVICES=0
-    ports:
-      - "8001:8001"
+      - GPU_WORKER_TOKEN=${GPU_WORKER_TOKEN:?set GPU_WORKER_TOKEN}
+      - ALLOWED_MEDIA_HOSTS=${ALLOWED_MEDIA_HOSTS:-}
+    # Internal only: not published on the host.
+    expose:
+      - "8001"
     networks:
       - visionstudio
 

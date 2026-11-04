@@ -1,9 +1,10 @@
-import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, MagicMock
 
-from app.main import app
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database import get_db
+from app.main import app
 from app.models import User
 
 
@@ -53,13 +54,12 @@ class TestAuth:
         assert "already registered" in response.json()["detail"]
 
     def test_login_success(self, api_client, override_get_db, mock_db):
-        from passlib.context import CryptContext
-        pwd_context = CryptContext(schemes=["bcrypt"])
+        from app.security import hash_password
 
         user = User(
             id="test-id",
             email="test@example.com",
-            password_hash=pwd_context.hash("password123"),
+            password_hash=hash_password("password123"),
             name="Test User"
         )
         mock_db.execute.return_value = MagicMock(
