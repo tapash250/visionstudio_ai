@@ -16,7 +16,7 @@ passlib[bcrypt]==1.7.4
 # passlib 1.7.4 is incompatible with bcrypt >= 4.1 (removed __about__) and fails outright on 5.x.
 bcrypt==4.0.1
 httpx==0.26.0
-aiofiles==23.2.1
+aiofiles==25.1.0
 python-magic==0.4.27
 sentry-sdk[fastapi]==1.39.0
 prometheus-client==0.19.0
