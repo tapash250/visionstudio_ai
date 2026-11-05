@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -259,6 +260,4 @@ class ProviderConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    __table_args__ = (
-        __import__("sqlalchemy").UniqueConstraint("user_id", "provider_id", name="uq_provider_config_user_provider"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "provider_id", name="uq_provider_config_user_provider"),)
