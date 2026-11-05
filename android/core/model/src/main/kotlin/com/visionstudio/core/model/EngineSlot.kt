@@ -23,6 +23,8 @@ data class EngineConfig(
     val slot: EngineSlot,
     val protocol: ProviderProtocol,
     val endpointUrl: String,
+    /** User-defined provider identifier; never selects a hardcoded model pipeline. */
+    val providerId: String = "custom",
     val modelId: String,
     val restDialect: RestDialect = RestDialect.OPENAI_COMPATIBLE,
     val authScheme: AuthScheme = AuthScheme.BEARER,

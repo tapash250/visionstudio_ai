@@ -26,7 +26,8 @@
     <string name="auth_header">Header</string>
     <string name="auth_none">None</string>
 
-    <string name="field_endpoint">Endpoint URL</string>
+    <string name="field_provider_id">Provider ID</string>
+    <string name="field_endpoint">Base URL</string>
     <string name="field_sse_endpoint">SSE endpoint</string>
     <string name="field_model">Model ID</string>
     <string name="field_model_optional">Model ID (optional)</string>
@@ -34,6 +35,7 @@
     <string name="field_header">Header name</string>
     <string name="field_api_key">API key</string>
 
+    <string name="hint_provider_id">openai, together, custom-provider</string>
     <string name="hint_endpoint_openai">https://api.openai.com/v1</string>
     <string name="hint_endpoint_fal">https://queue.fal.run</string>
     <string name="hint_endpoint_custom">https://models.example.com/generate</string>

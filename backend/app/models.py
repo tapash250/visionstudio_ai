@@ -12,6 +12,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -244,3 +245,19 @@ class MatureConsent(Base):
 # Add relationship to User
 User.mature_consent = relationship("MatureConsent", back_populates="user", uselist=False)
 User.moderation_logs = relationship("ModerationLog", back_populates="user", cascade="all, delete-orphan")
+
+
+class ProviderConfig(Base):
+    __tablename__ = "provider_configs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    provider_id = Column(String(128), nullable=False)
+    model_id = Column(String(256), nullable=False)
+    base_url = Column(String(2048), nullable=False)
+    encrypted_api_key = Column(Text, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (UniqueConstraint("user_id", "provider_id", name="uq_provider_config_user_provider"),)

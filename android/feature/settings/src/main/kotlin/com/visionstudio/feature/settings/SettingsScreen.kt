@@ -332,6 +332,17 @@ private fun SlotForm(
                 }
                 SectionHeader(stringResource(R.string.section_connection))
                 GlowTextField(
+                    value = draft.providerId,
+                    onValueChange = edit(SettingsField.Provider),
+                    label = stringResource(R.string.field_provider_id),
+                    placeholder = stringResource(R.string.hint_provider_id),
+                    supportingText = errors[SettingsField.Provider],
+                    isError = SettingsField.Provider in errors,
+                    mono = true,
+                    leadingIcon = Icons.Rounded.Cloud,
+                    enabled = enabled,
+                )
+                GlowTextField(
                     value = draft.endpointUrl,
                     onValueChange = edit(SettingsField.Endpoint),
                     label = stringResource(if (protocol.isMcp) R.string.field_sse_endpoint else R.string.field_endpoint),

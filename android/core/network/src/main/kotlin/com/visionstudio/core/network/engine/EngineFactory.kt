@@ -77,6 +77,9 @@ class EngineFactory @Inject constructor(
     }
 
     private fun validate(config: EngineConfig, apiKey: String?) {
+        if (config.providerId.isBlank() || config.providerId.length > 128 || !config.providerId.matches(Regex("[A-Za-z0-9][A-Za-z0-9._-]*"))) {
+            throw VisionStudioException.ValidationException("providerId", "Enter a valid provider ID (letters, numbers, dot, underscore or hyphen)")
+        }
         val url = config.endpointUrl.toHttpUrlOrNull()
         if (url == null && !(config.protocol == ProviderProtocol.REST && config.restDialect == RestDialect.FAL_QUEUE && config.endpointUrl.isBlank())) {
             throw VisionStudioException.ValidationException("endpointUrl", "Enter a valid http(s) endpoint URL")

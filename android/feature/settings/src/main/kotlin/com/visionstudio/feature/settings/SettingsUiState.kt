@@ -14,6 +14,7 @@ data class SlotDraft(
     val protocol: ProviderProtocol = ProviderProtocol.REST,
     val restDialect: RestDialect = RestDialect.OPENAI_COMPATIBLE,
     val authScheme: AuthScheme = AuthScheme.BEARER,
+    val providerId: String = "custom",
     val endpointUrl: String = "",
     val modelId: String = "",
     val mcpToolName: String = "",
@@ -30,6 +31,7 @@ data class SlotDraft(
         slot = slot,
         protocol = protocol,
         endpointUrl = endpointUrl.trim(),
+        providerId = providerId.trim(),
         modelId = modelId.trim(),
         restDialect = restDialect,
         authScheme = authScheme,
@@ -44,6 +46,7 @@ data class SlotDraft(
             restDialect = config.restDialect,
             authScheme = config.authScheme,
             endpointUrl = config.endpointUrl,
+            providerId = config.providerId,
             modelId = config.modelId,
             mcpToolName = config.mcpToolName.orEmpty(),
             customAuthHeader = config.customAuthHeader.orEmpty(),
@@ -63,6 +66,7 @@ sealed interface ProbeUiState {
 
 /** Form field identifiers, matching ValidationException.field values from the engine layer. */
 enum class SettingsField(val key: String) {
+    Provider("providerId"),
     Endpoint("endpointUrl"),
     Model("modelId"),
     Tool("mcpToolName"),

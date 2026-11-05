@@ -106,6 +106,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun editField(field: SettingsField, value: String) = editDraft(clearError = field) { draft ->
         when (field) {
+            SettingsField.Provider -> draft.copy(providerId = value)
             SettingsField.Endpoint -> draft.copy(endpointUrl = value)
             SettingsField.Model -> draft.copy(modelId = value)
             SettingsField.Tool -> draft.copy(mcpToolName = value)
