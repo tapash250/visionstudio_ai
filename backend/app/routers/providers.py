@@ -86,9 +86,13 @@ async def save_provider_config(data: ProviderInput, current_user: User = Depends
         ProviderConfig.user_id == current_user.id, ProviderConfig.provider_id == data.provider_id
     ))
     item = result.scalar_one_or_none()
+    if item is None and not data.api_key:
+        raise HTTPException(status_code=422, detail="API key is required for a new provider")
+    effective_key = data.api_key or decrypt_api_key(item.encrypted_api_key)
+    verification = await _probe(base_url, effective_key, data.model_id.strip())
+    if not verification["model_listed"]:
+        raise HTTPException(status_code=422, detail="Provider connection succeeded, but the requested model was not listed; configuration was not saved")
     if item is None:
-        if not data.api_key:
-            raise HTTPException(status_code=422, detail="API key is required for a new provider")
         item = ProviderConfig(user_id=current_user.id, provider_id=data.provider_id)
         db.add(item)
     item.model_id = data.model_id.strip()
