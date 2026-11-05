@@ -10,7 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 
 from app import config
-from app.routers import admin, animate, auth, edit, generate, projects, styles, upload, websocket
+from app.routers import admin, animate, auth, edit, generate, projects, providers, styles, upload, websocket
 from app.services.moderation import ModerationService
 from app.services.rate_limiter import RateLimiter, client_ip
 
@@ -118,6 +118,7 @@ async def health_check():
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(generate.router, prefix="/api/generate", tags=["Generation"])
+app.include_router(providers.router, prefix="/api/providers", tags=["AI Providers"])
 app.include_router(edit.router, prefix="/api/edit", tags=["Editing"])
 app.include_router(animate.router, prefix="/api/animate", tags=["Animation"])
 app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
