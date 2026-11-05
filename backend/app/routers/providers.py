@@ -93,6 +93,8 @@ async def save_provider_config(data: ProviderInput, current_user: User = Depends
         db.add(item)
     item.model_id = data.model_id.strip()
     item.base_url = base_url
+    await db.execute(ProviderConfig.__table__.update().where(ProviderConfig.user_id == current_user.id).values(is_active=False))
+    item.is_active = True
     if data.api_key:
         item.encrypted_api_key = encrypt_api_key(data.api_key)
     await db.commit()
