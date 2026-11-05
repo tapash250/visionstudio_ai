@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { motion } from 'framer-motion';
 import { 
@@ -11,6 +11,7 @@ import {
 import { useSession, signOut } from 'next-auth/react';
 
 import { useAuthStore } from '@/stores/authStore';
+import { apiGet, apiPost } from '@/lib/api';
 
 interface SettingSection {
   title: string;
@@ -34,6 +35,58 @@ export default function SettingsPage() {
   const [showPinInput, setShowPinInput] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [providerId, setProviderId] = useState('openai');
+  const [modelId, setModelId] = useState('');
+  const [baseUrl, setBaseUrl] = useState('https://api.openai.com/v1');
+  const [apiKey, setApiKey] = useState('');
+  const [providerStatus, setProviderStatus] = useState('');
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [savedProvider, setSavedProvider] = useState<{providerId:string;modelId:string;baseUrl:string;hasApiKey:boolean}|null>(null);
+
+  useEffect(() => {
+    apiGet<{providers:Array<{providerId:string;modelId:string;baseUrl:string;hasApiKey:boolean}>}>('/api/providers/')
+      .then(({providers}) => {
+        const item = providers[0];
+        if (item) {
+          setSavedProvider(item);
+          setProviderId(item.providerId);
+          setModelId(item.modelId);
+          setBaseUrl(item.baseUrl);
+        }
+      })
+      .catch(() => setProviderStatus('Sign in and configure the backend before managing providers.'));
+  }, []);
+
+  const providerPayload = () => ({
+    provider_id: providerId.trim(),
+    model_id: modelId.trim(),
+    base_url: baseUrl.trim(),
+    api_key: apiKey,
+  });
+
+  const testProvider = async () => {
+    setProviderBusy(true);
+    setProviderStatus('');
+    try {
+      const result = await apiPost<{reachable:boolean;model_listed:boolean;message:string}>('/api/providers/test', providerPayload());
+      setProviderStatus(result.message + (result.model_listed ? '' : ' — check the model ID; provider did not list it.'));
+    } catch (error) {
+      setProviderStatus(error instanceof Error ? error.message : 'Connection test failed.');
+    } finally { setProviderBusy(false); }
+  };
+
+  const saveProvider = async () => {
+    setProviderBusy(true);
+    setProviderStatus('');
+    try {
+      const result = await apiPost<{providerId:string;modelId:string;baseUrl:string;hasApiKey:boolean}>('/api/providers/', providerPayload());
+      setSavedProvider(result);
+      setApiKey('');
+      setProviderStatus('Provider configuration saved. Generation/edit/animation routing is not yet enabled for this provider.');
+    } catch (error) {
+      setProviderStatus(error instanceof Error ? error.message : 'Could not save provider.');
+    } finally { setProviderBusy(false); }
+  };
 
   const handleMatureToggle = () => {
     if (!matureMode) {
@@ -165,6 +218,33 @@ export default function SettingsPage() {
           <p className="truncate text-xs text-muted-foreground">{session?.user?.email || 'Sign in to sync projects'}</p>
         </div>
       </div>
+
+      {/* Provider configuration */}
+      <section className="rounded-2xl border border-border bg-card p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold">AI Provider</h3>
+          <p className="text-xs text-muted-foreground">Configure a provider endpoint and verify OpenAI-compatible model discovery.</p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <label className="text-xs text-muted-foreground">Provider ID
+            <input value={providerId} onChange={e=>setProviderId(e.target.value)} placeholder="openai, together, custom" className="input-mobile mt-1 w-full py-3" />
+          </label>
+          <label className="text-xs text-muted-foreground">Model ID
+            <input value={modelId} onChange={e=>setModelId(e.target.value)} placeholder="Exact provider model ID" className="input-mobile mt-1 w-full py-3" />
+          </label>
+          <label className="text-xs text-muted-foreground">Base URL
+            <input value={baseUrl} onChange={e=>setBaseUrl(e.target.value)} placeholder="https://api.provider.com/v1" className="input-mobile mt-1 w-full py-3" />
+          </label>
+          <label className="text-xs text-muted-foreground">API Key
+            <input type="password" autoComplete="new-password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder={savedProvider?.hasApiKey ? "Saved securely — enter to replace" : "Enter provider API key"} className="input-mobile mt-1 w-full py-3" />
+          </label>
+          <div className="flex gap-2">
+            <button onClick={testProvider} disabled={providerBusy || !providerId || !modelId || !baseUrl || !apiKey} className="btn-secondary flex-1 disabled:opacity-50">{providerBusy ? 'Checking…' : 'Test connection'}</button>
+            <button onClick={saveProvider} disabled={providerBusy || !providerId || !modelId || !baseUrl || !apiKey} className="btn-primary flex-1 disabled:opacity-50">{providerBusy ? 'Saving…' : 'Save provider'}</button>
+          </div>
+          {providerStatus && <p role="status" className="text-xs text-muted-foreground">{providerStatus}</p>}
+        </div>
+      </section>
 
       {/* Settings Sections */}
       {sections.map((section) => (
