@@ -41,6 +41,7 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState('');
   const [providerStatus, setProviderStatus] = useState('');
   const [providerBusy, setProviderBusy] = useState(false);
+  const [connectionVerified, setConnectionVerified] = useState(false);
   const [savedProvider, setSavedProvider] = useState<{providerId:string;modelId:string;baseUrl:string;hasApiKey:boolean}|null>(null);
 
   useEffect(() => {
@@ -67,8 +68,10 @@ export default function SettingsPage() {
   const testProvider = async () => {
     setProviderBusy(true);
     setProviderStatus('');
+    setConnectionVerified(false);
     try {
       const result = await apiPost<{reachable:boolean;model_listed:boolean;message:string}>('/api/providers/test', providerPayload());
+      setConnectionVerified(result.reachable && result.model_listed);
       setProviderStatus(result.message + (result.model_listed ? '' : ' — check the model ID; provider did not list it.'));
     } catch (error) {
       setProviderStatus(error instanceof Error ? error.message : 'Connection test failed.');
@@ -82,6 +85,7 @@ export default function SettingsPage() {
       const result = await apiPost<{providerId:string;modelId:string;baseUrl:string;hasApiKey:boolean}>('/api/providers/', providerPayload());
       setSavedProvider(result);
       setApiKey('');
+      setConnectionVerified(false);
       setProviderStatus('Provider configuration saved. Generation/edit/animation routing is not yet enabled for this provider.');
     } catch (error) {
       setProviderStatus(error instanceof Error ? error.message : 'Could not save provider.');
@@ -227,16 +231,16 @@ export default function SettingsPage() {
         </div>
         <div className="flex flex-col gap-3">
           <label className="text-xs text-muted-foreground">Provider ID
-            <input value={providerId} onChange={e=>setProviderId(e.target.value)} placeholder="openai, together, custom" className="input-mobile mt-1 w-full py-3" />
+            <input value={providerId} onChange={e=>{setProviderId(e.target.value);setConnectionVerified(false);}} placeholder="openai, together, custom" className="input-mobile mt-1 w-full py-3" />
           </label>
           <label className="text-xs text-muted-foreground">Model ID
-            <input value={modelId} onChange={e=>setModelId(e.target.value)} placeholder="Exact provider model ID" className="input-mobile mt-1 w-full py-3" />
+            <input value={modelId} onChange={e=>{setModelId(e.target.value);setConnectionVerified(false);}} placeholder="Exact provider model ID" className="input-mobile mt-1 w-full py-3" />
           </label>
           <label className="text-xs text-muted-foreground">Base URL
-            <input value={baseUrl} onChange={e=>setBaseUrl(e.target.value)} placeholder="https://api.provider.com/v1" className="input-mobile mt-1 w-full py-3" />
+            <input value={baseUrl} onChange={e=>{setBaseUrl(e.target.value);setConnectionVerified(false);}} placeholder="https://api.provider.com/v1" className="input-mobile mt-1 w-full py-3" />
           </label>
           <label className="text-xs text-muted-foreground">API Key
-            <input type="password" autoComplete="new-password" value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder={savedProvider?.hasApiKey ? "Saved securely — enter to replace" : "Enter provider API key"} className="input-mobile mt-1 w-full py-3" />
+            <input type="password" autoComplete="new-password" value={apiKey} onChange={e=>{setApiKey(e.target.value);setConnectionVerified(false);}} placeholder={savedProvider?.hasApiKey ? "Saved securely — enter to replace" : "Enter provider API key"} className="input-mobile mt-1 w-full py-3" />
           </label>
           <div className="flex gap-2">
             <button onClick={testProvider} disabled={providerBusy || !providerId || !modelId || !baseUrl || !apiKey} className="btn-secondary flex-1 disabled:opacity-50">{providerBusy ? 'Checking…' : 'Test connection'}</button>
